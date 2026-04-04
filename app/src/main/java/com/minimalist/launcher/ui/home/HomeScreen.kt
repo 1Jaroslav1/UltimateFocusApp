@@ -2,13 +2,14 @@
  * Home screen composable — the launcher's primary surface.
  * Displays a text clock with battery arc (ULT-6) and a scrollable list of
  * favorite apps as plain text labels with no icons (ULT-6).
- * Swipe-down opens the notification shade; swipe-left navigates to the app
- * drawer (wired in ULT-7).
- * Covers: ULT-6
+ * Swipe-left opens the full app drawer (ULT-7).
+ * Swipe-down opens the notification shade.
+ * Covers: ULT-6, ULT-7
  */
 package com.minimalist.launcher.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,12 +56,25 @@ fun HomeScreen(
 
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
+    var totalDragX by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragEnd = { totalDragX = 0f },
+                    onDragCancel = { totalDragX = 0f },
+                ) { _, dragAmount ->
+                    totalDragX += dragAmount
+                    if (totalDragX < -120f) {
+                        totalDragX = 0f
+                        onOpenDrawer() // swipe left → app drawer
+                    }
+                }
+            }
             .pointerInput(Unit) {
                 detectVerticalDragGestures { _, dragAmount ->
                     if (dragAmount > 40) {
