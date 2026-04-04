@@ -6,10 +6,13 @@
  */
 package com.minimalist.launcher.ui
 
+import android.app.role.RoleManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -22,6 +25,10 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class LauncherActivity : ComponentActivity() {
 
+    private val requestHomeLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { /* User made their choice — no further action needed */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -31,6 +38,20 @@ class LauncherActivity : ComponentActivity() {
             MinimalistLauncherTheme(darkTheme = preferences.isDarkTheme) {
                 val navController = rememberNavController()
                 NavGraph(navController = navController)
+            }
+        }
+        requestDefaultLauncherIfNeeded()
+    }
+
+    private fun requestDefaultLauncherIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(RoleManager::class.java)
+            if (roleManager.isRoleAvailable(RoleManager.ROLE_HOME) &&
+                !roleManager.isRoleHeld(RoleManager.ROLE_HOME)
+            ) {
+                requestHomeLauncher.launch(
+                    roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME),
+                )
             }
         }
     }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -103,11 +104,16 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(48.dp))
 
-            ClockWidget(
-                currentTime = uiState.currentTime,
-                batteryLevel = uiState.batteryLevel,
-                isCharging = uiState.isCharging,
-            )
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                ClockWidget(
+                    currentTime = uiState.currentTime,
+                    batteryLevel = uiState.batteryLevel,
+                    isCharging = uiState.isCharging,
+                )
+            }
 
             Spacer(modifier = Modifier.height(48.dp))
 

@@ -10,6 +10,7 @@ import android.content.ComponentName
 import app.cash.turbine.test
 import com.minimalist.launcher.data.repository.FakeAppRepository
 import com.minimalist.launcher.domain.model.AppInfo
+import com.minimalist.launcher.domain.repository.FakeUserPreferencesSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -27,6 +28,7 @@ class AppDrawerViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var fakeRepository: FakeAppRepository
+    private lateinit var fakePreferences: FakeUserPreferencesSource
     private lateinit var viewModel: AppDrawerViewModel
 
     private fun makeApp(name: String) = AppInfo(
@@ -39,7 +41,8 @@ class AppDrawerViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         fakeRepository = FakeAppRepository()
-        viewModel = AppDrawerViewModel(fakeRepository)
+        fakePreferences = FakeUserPreferencesSource()
+        viewModel = AppDrawerViewModel(fakeRepository, fakePreferences)
     }
 
     @After
