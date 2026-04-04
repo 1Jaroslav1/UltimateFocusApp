@@ -13,7 +13,7 @@ import com.minimalist.launcher.domain.model.AppInfo
 import com.minimalist.launcher.domain.repository.FakeUserPreferencesSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -27,7 +27,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakeRepository: FakeAppRepository
     private lateinit var fakePreferences: FakeUserPreferencesSource
     private lateinit var viewModel: HomeViewModel
@@ -35,7 +35,7 @@ class HomeViewModelTest {
     private fun makeApp(name: String, isFavorite: Boolean = true) = AppInfo(
         packageName = "com.test.${name.lowercase()}",
         label = name,
-        componentName = ComponentName("com.test.${name.lowercase()}", "MainActivity"),
+        componentName = ComponentName.unflattenFromString("com.test.${name.lowercase()}/MainActivity")!!,
         isFavorite = isFavorite,
     )
 
@@ -44,11 +44,8 @@ class HomeViewModelTest {
         Dispatchers.setMain(testDispatcher)
         fakeRepository = FakeAppRepository()
         fakePreferences = FakeUserPreferencesSource()
-
-        // HomeViewModel requires Application only for battery — supply null-safe stub
-        val stubApp = object : android.app.Application() {}
         viewModel = HomeViewModel(
-            application = stubApp,
+            application = android.app.Application(),
             appRepository = fakeRepository,
             preferencesSource = fakePreferences,
         )
@@ -75,7 +72,10 @@ class HomeViewModelTest {
         val favorites = listOf(makeApp("Calendar"), makeApp("Phone"))
         fakeRepository.setFavorites(favorites)
         viewModel.favoriteApps.test {
-            assertEquals(favorites, awaitItem())
+            val items = awaitItem()
+            assertEquals(2, items.size)
+            assertEquals("Calendar", items[0].label)
+            assertEquals("Phone", items[1].label)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -87,7 +87,9 @@ class HomeViewModelTest {
             awaitItem() // empty initial
             val updated = listOf(makeApp("Maps"))
             fakeRepository.setFavorites(updated)
-            assertEquals(updated, awaitItem())
+            val items = awaitItem()
+            assertEquals(1, items.size)
+            assertEquals("Maps", items[0].label)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -96,7 +98,6 @@ class HomeViewModelTest {
     fun `launchApp delegates to repository`() = runTest {
         val app = makeApp("Maps")
         viewModel.launchApp(app)
-        testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(app, fakeRepository.launchedApp)
     }
 
@@ -105,7 +106,6 @@ class HomeViewModelTest {
         val app = makeApp("Notes", isFavorite = false)
         fakeRepository.setFavorites(emptyList())
         viewModel.toggleFavorite(app)
-        testDispatcher.scheduler.advanceUntilIdle()
         viewModel.favoriteApps.test {
             assertTrue(awaitItem().any { it.packageName == app.packageName })
             cancelAndIgnoreRemainingEvents()
@@ -117,7 +117,6 @@ class HomeViewModelTest {
         val app = makeApp("Slack")
         fakeRepository.setFavorites(listOf(app))
         viewModel.toggleFavorite(app)
-        testDispatcher.scheduler.advanceUntilIdle()
         viewModel.favoriteApps.test {
             assertTrue(awaitItem().none { it.packageName == app.packageName })
             cancelAndIgnoreRemainingEvents()

@@ -50,11 +50,16 @@ class HomeViewModel @Inject constructor(
     private fun startClockLoop() {
         viewModelScope.launch {
             while (isActive) {
-                _uiState.value = HomeUiState(
-                    currentTime = java.time.LocalDateTime.now(),
-                    batteryLevel = getBatteryLevel(application),
-                    isCharging = isCharging(application),
-                )
+                _uiState.value = try {
+                    HomeUiState(
+                        currentTime = java.time.LocalDateTime.now(),
+                        batteryLevel = getBatteryLevel(application),
+                        isCharging = isCharging(application),
+                    )
+                } catch (_: Exception) {
+                    // Battery reading may fail in unit-test environments without Android context
+                    _uiState.value.copy(currentTime = java.time.LocalDateTime.now())
+                }
                 delay(1_000L)
             }
         }

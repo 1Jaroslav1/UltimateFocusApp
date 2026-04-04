@@ -1,37 +1,35 @@
 /**
- * Integration tests for UserPreferencesDataStore using a real DataStore instance
- * backed by a temporary test context. Verifies default values, persistence of
- * updates, and correct reading of the autoKeyboard flag.
+ * Integration tests for UserPreferencesDataStore using a real DataStore instance.
+ * Verifies default values, persistence of updates, and correct reading
+ * of the autoKeyboard flag.
  * Covers: ULT-8
  */
 package com.minimalist.launcher.data.preferences
 
 import android.content.Context
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.preferencesDataStore
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.minimalist.launcher.domain.model.UserPreferences
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class UserPreferencesDataStoreTest {
 
-    private lateinit var context: Context
     private lateinit var dataStore: UserPreferencesDataStore
 
     @Before
-    fun setUp() = runTest {
-        context = ApplicationProvider.getApplicationContext()
-        // Clear any persisted state before each test
-        clearDataStore(context)
+    fun setUp() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        // Delete the DataStore file before each test to ensure clean state
+        File(context.filesDir, "datastore/user_preferences.preferences_pb").delete()
         dataStore = UserPreferencesDataStore(context)
     }
 
@@ -39,44 +37,38 @@ class UserPreferencesDataStoreTest {
 
     @Test
     fun defaultPreferences_darkThemeIsTrue() = runTest {
-        val prefs = dataStore.preferences.first()
-        assertTrue(prefs.isDarkTheme)
+        assertTrue(dataStore.preferences.first().isDarkTheme)
     }
 
     @Test
     fun defaultPreferences_autoKeyboardIsTrue() = runTest {
-        val prefs = dataStore.preferences.first()
-        assertTrue(prefs.autoKeyboard)
+        assertTrue(dataStore.preferences.first().autoKeyboard)
     }
 
     @Test
     fun updateDarkTheme_persistsNewValue() = runTest {
         dataStore.updateDarkTheme(false)
-        val prefs = dataStore.preferences.first()
-        assertFalse(prefs.isDarkTheme)
+        assertFalse(dataStore.preferences.first().isDarkTheme)
     }
 
     @Test
     fun updateAutoKeyboard_toFalse_persistsNewValue() = runTest {
         dataStore.updateAutoKeyboard(false)
-        val prefs = dataStore.preferences.first()
-        assertFalse(prefs.autoKeyboard)
+        assertFalse(dataStore.preferences.first().autoKeyboard)
     }
 
     @Test
     fun updateAutoKeyboard_toTrue_persistsNewValue() = runTest {
-        dataStore.updateAutoKeyboard(false) // set to false first
-        dataStore.updateAutoKeyboard(true)  // then back to true
-        val prefs = dataStore.preferences.first()
-        assertTrue(prefs.autoKeyboard)
+        dataStore.updateAutoKeyboard(false)
+        dataStore.updateAutoKeyboard(true)
+        assertTrue(dataStore.preferences.first().autoKeyboard)
     }
 
     @Test
     fun multipleUpdates_lastWriteWins() = runTest {
         dataStore.updateDarkTheme(false)
         dataStore.updateDarkTheme(true)
-        val prefs = dataStore.preferences.first()
-        assertTrue(prefs.isDarkTheme)
+        assertTrue(dataStore.preferences.first().isDarkTheme)
     }
 
     // ── Border cases ─────────────────────────────────────────────────────────
@@ -85,10 +77,10 @@ class UserPreferencesDataStoreTest {
     fun preferences_returnsDefaultsForAllFields() = runTest {
         val prefs = dataStore.preferences.first()
         val expected = UserPreferences()
-        assertTrue(prefs.isDarkTheme == expected.isDarkTheme)
-        assertTrue(prefs.fontSize == expected.fontSize)
-        assertTrue(prefs.homeAlignment == expected.homeAlignment)
-        assertTrue(prefs.autoKeyboard == expected.autoKeyboard)
+        assertEquals(expected.isDarkTheme, prefs.isDarkTheme)
+        assertEquals(expected.fontSize, prefs.fontSize)
+        assertEquals(expected.homeAlignment, prefs.homeAlignment)
+        assertEquals(expected.autoKeyboard, prefs.autoKeyboard)
     }
 
     @Test
@@ -96,14 +88,7 @@ class UserPreferencesDataStoreTest {
         dataStore.updateDarkTheme(false)
         dataStore.updateAutoKeyboard(false)
         val prefs = dataStore.preferences.first()
-        assertFalse(prefs.isDarkTheme)  // dark theme still false
-        assertFalse(prefs.autoKeyboard) // auto keyboard also false
-    }
-
-    private companion object {
-        private val Context.testDataStore by preferencesDataStore("user_preferences")
-        suspend fun clearDataStore(context: Context) {
-            context.testDataStore.edit { it.clear() }
-        }
+        assertFalse(prefs.isDarkTheme)
+        assertFalse(prefs.autoKeyboard)
     }
 }
