@@ -1,8 +1,8 @@
 /**
  * DataStore-backed implementation of UserPreferencesSource.
- * Persists user preferences (theme, font size, alignment) to disk and
- * exposes them as a Flow so the UI reacts to changes without polling.
- * Covers: ULT-6
+ * Persists user preferences (theme, font size, alignment, auto-keyboard) to disk
+ * and exposes them as a Flow so the UI reacts to changes without polling.
+ * Covers: ULT-6, ULT-8
  */
 package com.minimalist.launcher.data.preferences
 
@@ -33,26 +33,32 @@ class UserPreferencesDataStore @Inject constructor(
         val DARK_THEME = booleanPreferencesKey("dark_theme")
         val FONT_SIZE = stringPreferencesKey("font_size")
         val HOME_ALIGNMENT = stringPreferencesKey("home_alignment")
+        val AUTO_KEYBOARD = booleanPreferencesKey("auto_keyboard")
     }
 
-    val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
+    override val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
         UserPreferences(
             isDarkTheme = prefs[Keys.DARK_THEME] ?: true,
             fontSize = prefs[Keys.FONT_SIZE]?.let { FontSize.valueOf(it) } ?: FontSize.MEDIUM,
             homeAlignment = prefs[Keys.HOME_ALIGNMENT]?.let { HomeAlignment.valueOf(it) }
                 ?: HomeAlignment.LEFT,
+            autoKeyboard = prefs[Keys.AUTO_KEYBOARD] ?: true,
         )
     }
 
-    suspend fun updateDarkTheme(isDark: Boolean) {
+    override suspend fun updateDarkTheme(isDark: Boolean) {
         context.dataStore.edit { it[Keys.DARK_THEME] = isDark }
     }
 
-    suspend fun updateFontSize(fontSize: FontSize) {
+    override suspend fun updateFontSize(fontSize: FontSize) {
         context.dataStore.edit { it[Keys.FONT_SIZE] = fontSize.name }
     }
 
-    suspend fun updateHomeAlignment(alignment: HomeAlignment) {
+    override suspend fun updateHomeAlignment(alignment: HomeAlignment) {
         context.dataStore.edit { it[Keys.HOME_ALIGNMENT] = alignment.name }
+    }
+
+    override suspend fun updateAutoKeyboard(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_KEYBOARD] = enabled }
     }
 }

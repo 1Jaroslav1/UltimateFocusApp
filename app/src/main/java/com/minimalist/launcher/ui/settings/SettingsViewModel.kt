@@ -29,4 +29,10 @@ class SettingsViewModel @Inject constructor(
             preferencesSource.updateDarkTheme(!preferences.value.isDarkTheme)
         }
     }
+
+    fun toggleAutoKeyboard() {
+        viewModelScope.launch {
+            preferencesSource.updateAutoKeyboard(!preferences.value.autoKeyboard)
+        }
+    }
 }

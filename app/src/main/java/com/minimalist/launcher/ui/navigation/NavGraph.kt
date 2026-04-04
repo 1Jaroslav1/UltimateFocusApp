@@ -2,8 +2,8 @@
  * Navigation host that maps routes to composable screens.
  * Drawer slides in from the right on swipe-left and slides out to the right
  * when the user swipes right or presses back (ULT-7).
- * Settings is accessible from within the drawer (ULT-8).
- * Covers: ULT-5, ULT-6, ULT-7
+ * Settings is accessible from within the drawer via a settings icon (ULT-8).
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-8
  */
 package com.minimalist.launcher.ui.navigation
 
@@ -17,6 +17,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.minimalist.launcher.ui.drawer.AppDrawerScreen
 import com.minimalist.launcher.ui.home.HomeScreen
+import com.minimalist.launcher.ui.settings.SettingsScreen
 
 @Composable
 fun NavGraph(navController: NavHostController) {
@@ -34,14 +35,23 @@ fun NavGraph(navController: NavHostController) {
 
         composable(
             route = Screen.Drawer.route,
-            // Slide in from the right when opening
             enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
-            // Slide out to the right when closing
             exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
             AppDrawerScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onOpenSettings = { navController.navigate(Screen.Settings.route) },
+            )
+        }
+
+        composable(
+            route = Screen.Settings.route,
+            enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
+            exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+        ) {
+            SettingsScreen(
                 onNavigateBack = { navController.popBackStack() },
             )
         }

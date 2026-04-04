@@ -30,4 +30,8 @@ class FakeUserPreferencesSource : UserPreferencesSource {
     override suspend fun updateHomeAlignment(alignment: HomeAlignment) {
         _preferences.value = _preferences.value.copy(homeAlignment = alignment)
     }
+
+    override suspend fun updateAutoKeyboard(enabled: Boolean) {
+        _preferences.value = _preferences.value.copy(autoKeyboard = enabled)
+    }
 }

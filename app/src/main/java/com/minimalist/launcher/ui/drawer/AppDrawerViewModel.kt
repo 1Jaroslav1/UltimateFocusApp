@@ -1,7 +1,8 @@
 /**
  * ViewModel for the full app drawer. Holds the search query and produces
  * a filtered, alphabetically sorted list of installed apps for display.
- * Reactive: any change to query or installed apps re-emits the list.
+ * Also exposes the autoKeyboard preference so the screen auto-focuses the
+ * search field when the setting is enabled (ULT-8).
  * Covers: ULT-7, ULT-8
  */
 package com.minimalist.launcher.ui.drawer
@@ -10,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.minimalist.launcher.data.repository.AppRepository
 import com.minimalist.launcher.domain.model.AppInfo
+import com.minimalist.launcher.domain.repository.UserPreferencesSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +27,7 @@ import javax.inject.Inject
 @HiltViewModel
 class AppDrawerViewModel @Inject constructor(
     private val appRepository: AppRepository,
+    private val preferencesSource: UserPreferencesSource,
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -35,6 +38,10 @@ class AppDrawerViewModel @Inject constructor(
         .flatMapLatest { query -> appRepository.searchApps(query) }
         .map { apps -> AppDrawerUiState.Success(apps) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppDrawerUiState.Loading)
+
+    val autoKeyboard: StateFlow<Boolean> = preferencesSource.preferences
+        .map { it.autoKeyboard }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query

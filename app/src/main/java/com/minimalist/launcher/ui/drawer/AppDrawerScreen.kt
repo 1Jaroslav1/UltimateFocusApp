@@ -1,8 +1,10 @@
 /**
  * Full app drawer screen. Displays all installed apps alphabetically as
  * plain text labels (no icons). Accessible via swipe-left from the home
- * screen; dismissible by swiping right or pressing back.
- * Covers: ULT-7
+ * screen; dismissible by swiping right or pressing back (ULT-7).
+ * When the auto-keyboard setting is enabled the search field gains focus
+ * automatically on entry, prompting intentional typing (ULT-8).
+ * Covers: ULT-7, ULT-8
  */
 package com.minimalist.launcher.ui.drawer
 
@@ -20,11 +22,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -37,14 +41,23 @@ import com.minimalist.launcher.ui.drawer.components.SearchBar
 @Composable
 fun AppDrawerScreen(
     onNavigateBack: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     viewModel: AppDrawerViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val autoKeyboard by viewModel.autoKeyboard.collectAsStateWithLifecycle()
 
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
     var totalDragX by remember { mutableFloatStateOf(0f) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(autoKeyboard) {
+        if (autoKeyboard) {
+            runCatching { focusRequester.requestFocus() }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -68,6 +81,7 @@ fun AppDrawerScreen(
         SearchBar(
             query = searchQuery,
             onQueryChange = viewModel::updateSearchQuery,
+            focusRequester = focusRequester,
         )
 
         when (val state = uiState) {

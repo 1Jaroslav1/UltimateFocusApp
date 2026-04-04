@@ -16,4 +16,5 @@ interface UserPreferencesSource {
     suspend fun updateDarkTheme(isDark: Boolean)
     suspend fun updateFontSize(fontSize: FontSize)
     suspend fun updateHomeAlignment(alignment: HomeAlignment)
+    suspend fun updateAutoKeyboard(enabled: Boolean)
 }
