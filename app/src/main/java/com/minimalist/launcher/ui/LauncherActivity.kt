@@ -2,6 +2,8 @@
  * The single Activity that hosts the entire Compose UI tree.
  * Declared as the HOME intent handler in AndroidManifest so the system
  * presents it as the device home screen.
+ * On first launch, prompts the user to set this app as the default launcher
+ * via RoleManager (API 29+).
  * Covers: ULT-5
  */
 package com.minimalist.launcher.ui
@@ -13,10 +15,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.compose.runtime.getValue
 import com.minimalist.launcher.ui.navigation.NavGraph
 import com.minimalist.launcher.ui.settings.SettingsViewModel
 import com.minimalist.launcher.ui.theme.MinimalistLauncherTheme
@@ -24,6 +26,8 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class LauncherActivity : ComponentActivity() {
+
+    private var hasRequestedLauncherRole = false
 
     private val requestHomeLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -40,18 +44,30 @@ class LauncherActivity : ComponentActivity() {
                 NavGraph(navController = navController)
             }
         }
-        requestDefaultLauncherIfNeeded()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!hasRequestedLauncherRole) {
+            hasRequestedLauncherRole = true
+            requestDefaultLauncherIfNeeded()
+        }
     }
 
     private fun requestDefaultLauncherIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roleManager = getSystemService(RoleManager::class.java)
-            if (roleManager.isRoleAvailable(RoleManager.ROLE_HOME) &&
-                !roleManager.isRoleHeld(RoleManager.ROLE_HOME)
-            ) {
-                requestHomeLauncher.launch(
-                    roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME),
-                )
+            try {
+                val roleManager = getSystemService(RoleManager::class.java)
+                if (roleManager != null &&
+                    roleManager.isRoleAvailable(RoleManager.ROLE_HOME) &&
+                    !roleManager.isRoleHeld(RoleManager.ROLE_HOME)
+                ) {
+                    requestHomeLauncher.launch(
+                        roleManager.createRequestRoleIntent(RoleManager.ROLE_HOME),
+                    )
+                }
+            } catch (_: Exception) {
+                // RoleManager may not be available on all devices/emulators
             }
         }
     }

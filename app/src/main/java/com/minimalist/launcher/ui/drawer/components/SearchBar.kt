@@ -73,8 +73,7 @@ fun SearchBar(
             cursorColor = MaterialTheme.colorScheme.onBackground,
         ),
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 8.dp)
+            .padding(start = 24.dp, end = 0.dp, top = 8.dp, bottom = 8.dp)
             .focusRequester(focusRequester)
             .testTag("search_bar"),
     )

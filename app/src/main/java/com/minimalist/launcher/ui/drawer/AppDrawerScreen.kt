@@ -11,13 +11,20 @@ package com.minimalist.launcher.ui.drawer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -78,11 +85,27 @@ fun AppDrawerScreen(
             }
             .testTag("app_drawer_screen"),
     ) {
-        SearchBar(
-            query = searchQuery,
-            onQueryChange = viewModel::updateSearchQuery,
-            focusRequester = focusRequester,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            SearchBar(
+                query = searchQuery,
+                onQueryChange = viewModel::updateSearchQuery,
+                focusRequester = focusRequester,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.padding(end = 8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         when (val state = uiState) {
             is AppDrawerUiState.Loading -> {
