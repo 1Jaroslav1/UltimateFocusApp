@@ -7,17 +7,17 @@ plugins {
 }
 
 android {
-    namespace = "com.minimalist.launcher"
+    namespace = "com.ultimatefocus.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.minimalist.launcher"
+        applicationId = "com.ultimatefocus.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
-        testInstrumentationRunner = "com.minimalist.launcher.HiltTestRunner"
+        testInstrumentationRunner = "com.ultimatefocus.app.HiltTestRunner"
     }
 
     buildTypes {
