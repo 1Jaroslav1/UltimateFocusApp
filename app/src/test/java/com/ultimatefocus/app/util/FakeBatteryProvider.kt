@@ -1,9 +1,12 @@
 package com.ultimatefocus.app.util
 
 class FakeBatteryProvider(
-    var batteryLevel: Int = 75,
-    var charging: Boolean = false,
+    private var _batteryLevel: Int = 75,
+    private var _charging: Boolean = false,
 ) : BatteryProvider {
-    override fun getBatteryLevel(): Int = batteryLevel
-    override fun isCharging(): Boolean = charging
+    override fun getBatteryLevel(): Int = _batteryLevel
+    override fun isCharging(): Boolean = _charging
+
+    fun setBatteryLevel(level: Int) { _batteryLevel = level }
+    fun setCharging(charging: Boolean) { _charging = charging }
 }

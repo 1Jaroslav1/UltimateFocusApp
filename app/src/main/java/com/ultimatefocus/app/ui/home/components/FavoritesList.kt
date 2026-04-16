@@ -15,8 +15,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -47,17 +49,19 @@ fun FavoritesList(
         favorites.forEach { app ->
             Text(
                 text = app.label,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Normal,
                 textAlign = textAlign,
                 modifier = Modifier
                     .fillMaxWidth()
                     .combinedClickable(
+                        indication = ripple(color = Color.Gray),
+                        interactionSource = null,
                         onClick = { onAppClick(app) },
                         onLongClick = { onAppLongClick(app) },
                     )
-                    .padding(vertical = 12.dp, horizontal = 24.dp)
+                    .padding(vertical = 14.dp, horizontal = 8.dp)
                     .testTag("favorite_item_${app.packageName}"),
             )
         }

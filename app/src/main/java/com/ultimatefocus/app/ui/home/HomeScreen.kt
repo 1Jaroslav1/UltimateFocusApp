@@ -21,10 +21,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,11 +36,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.HomeAlignment
+import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
 import com.ultimatefocus.app.ui.home.components.ClockWidget
 import com.ultimatefocus.app.ui.home.components.FavoritesList
 import java.lang.reflect.Method
+import androidx.core.net.toUri
 
 @Composable
 fun HomeScreen(
@@ -128,24 +131,17 @@ fun HomeScreen(
         }
 
         if (showContextMenu && selectedApp != null) {
-            AlertDialog(
-                onDismissRequest = { showContextMenu = false },
-                title = { Text(selectedApp!!.label) },
-                text = null,
-                confirmButton = {
-                    TextButton(onClick = {
-                        selectedApp?.let { viewModel.toggleFavorite(it) }
-                        showContextMenu = false
-                    }) {
-                        Text(
-                            if (selectedApp?.isFavorite == true) "Remove from Favorites"
-                            else "Add to Favorites",
-                        )
+            FavoriteContextMenuDialog(
+                app = selectedApp!!,
+                onToggleFavorite = { viewModel.toggleFavorite(it) },
+                onAppInfo = { app ->
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = "package:${app.packageName}".toUri()
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
+                    context.startActivity(intent)
                 },
-                dismissButton = {
-                    TextButton(onClick = { showContextMenu = false }) { Text("Cancel") }
-                },
+                onDismiss = { showContextMenu = false },
             )
         }
     }

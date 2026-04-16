@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
@@ -50,7 +51,7 @@ fun SearchBar(
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = Color.White,
             )
         },
         trailingIcon = {
@@ -59,7 +60,7 @@ fun SearchBar(
                     Icon(
                         imageVector = Icons.Default.Clear,
                         contentDescription = "Clear search",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = Color.White,
                     )
                 }
             }
@@ -68,12 +69,12 @@ fun SearchBar(
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+            focusedBorderColor = Color.White,
+            unfocusedBorderColor = Color.White,
             cursorColor = MaterialTheme.colorScheme.onBackground,
         ),
         modifier = modifier
-            .padding(start = 24.dp, end = 0.dp, top = 8.dp, bottom = 8.dp)
+            .padding(start = 16.dp, end = 0.dp, top = 8.dp, bottom = 8.dp)
             .focusRequester(focusRequester)
             .testTag("search_bar"),
     )

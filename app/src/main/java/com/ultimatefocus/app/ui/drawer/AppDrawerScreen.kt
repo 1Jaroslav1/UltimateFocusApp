@@ -22,12 +22,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,7 +37,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Intent
+import android.provider.Settings
+import androidx.core.net.toUri
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
 import com.ultimatefocus.app.ui.drawer.components.AppListItem
 import com.ultimatefocus.app.ui.drawer.components.SearchBar
 
@@ -88,7 +90,7 @@ fun AppDrawerScreen(
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Settings",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = androidx.compose.ui.graphics.Color.White,
                 )
             }
         }
@@ -138,24 +140,18 @@ fun AppDrawerScreen(
     }
 
     if (showContextMenu && selectedApp != null) {
-        AlertDialog(
-            onDismissRequest = { showContextMenu = false },
-            title = { Text(selectedApp!!.label) },
-            text = null,
-            confirmButton = {
-                TextButton(onClick = {
-                    selectedApp?.let { viewModel.toggleFavorite(it) }
-                    showContextMenu = false
-                }) {
-                    Text(
-                        if (selectedApp?.isFavorite == true) "Remove from Favorites"
-                        else "Add to Favorites",
-                    )
+        val context = androidx.compose.ui.platform.LocalContext.current
+        FavoriteContextMenuDialog(
+            app = selectedApp!!,
+            onToggleFavorite = { viewModel.toggleFavorite(it) },
+            onAppInfo = { app ->
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = "package:${app.packageName}".toUri()
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
+                context.startActivity(intent)
             },
-            dismissButton = {
-                TextButton(onClick = { showContextMenu = false }) { Text("Cancel") }
-            },
+            onDismiss = { showContextMenu = false },
         )
     }
 }
