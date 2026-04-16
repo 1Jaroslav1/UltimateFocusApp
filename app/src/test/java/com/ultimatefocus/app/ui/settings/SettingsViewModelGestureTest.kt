@@ -80,4 +80,48 @@ class SettingsViewModelGestureTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    // ── ULT-18: double-tap-to-lock ───────────────────────────────────────────
+
+    @Test
+    fun `setDoubleTapToLock enables the preference`() = runTest {
+        viewModel.preferences.test {
+            awaitItem()
+            viewModel.setDoubleTapToLock(true)
+            assertEquals(true, awaitItem().doubleTapToLockEnabled)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `setDoubleTapToLock to true when admin not granted triggers permission prompt`() {
+        fakeSystemActions.setAdminGranted(false)
+
+        viewModel.setDoubleTapToLock(true)
+
+        assertEquals(1, fakeSystemActions.requestLockPermissionCalls)
+    }
+
+    @Test
+    fun `setDoubleTapToLock to true when admin already granted does not reprompt`() {
+        fakeSystemActions.setAdminGranted(true)
+
+        viewModel.setDoubleTapToLock(true)
+
+        assertEquals(0, fakeSystemActions.requestLockPermissionCalls)
+    }
+
+    @Test
+    fun `setDoubleTapToLock to false disables the preference and does not prompt`() = runTest {
+        fakePreferences.setPreferences(UserPreferences(doubleTapToLockEnabled = true))
+        fakeSystemActions.setAdminGranted(false)
+
+        viewModel.preferences.test {
+            awaitItem()
+            viewModel.setDoubleTapToLock(false)
+            assertEquals(false, awaitItem().doubleTapToLockEnabled)
+            cancelAndIgnoreRemainingEvents()
+        }
+        assertEquals(0, fakeSystemActions.requestLockPermissionCalls)
+    }
 }

@@ -98,4 +98,41 @@ class HomeViewModelGestureTest {
 
         assertEquals(0, fakeSystemActions.searchOpenCount)
     }
+
+    // ── ULT-18 ───────────────────────────────────────────────────────────────
+
+    @Test
+    fun onDoubleTap_whenDisabled_doesNothing() = runTest {
+        fakePreferences.setPreferences(UserPreferences(doubleTapToLockEnabled = false))
+        fakeSystemActions.setAdminGranted(true)
+
+        viewModel.onDoubleTap()
+
+        assertEquals(0, fakeSystemActions.lockScreenCalls)
+        assertEquals(0, fakeSystemActions.requestLockPermissionCalls)
+    }
+
+    @Test
+    fun onDoubleTap_whenEnabledAndGranted_locksScreen() = runTest {
+        fakePreferences.setPreferences(UserPreferences(doubleTapToLockEnabled = true))
+        fakeSystemActions.setAdminGranted(true)
+
+        viewModel.onDoubleTap()
+
+        assertEquals(1, fakeSystemActions.lockScreenCalls)
+        assertEquals(0, fakeSystemActions.requestLockPermissionCalls)
+    }
+
+    @Test
+    fun onDoubleTap_whenEnabledButNotGranted_requestsPermission() = runTest {
+        fakePreferences.setPreferences(UserPreferences(doubleTapToLockEnabled = true))
+        fakeSystemActions.setAdminGranted(false)
+
+        viewModel.onDoubleTap()
+
+        // Still attempts the lock so we can react to MissingPermission,
+        // and triggers the admin prompt so the user can grant access next time.
+        assertEquals(1, fakeSystemActions.lockScreenCalls)
+        assertEquals(1, fakeSystemActions.requestLockPermissionCalls)
+    }
 }

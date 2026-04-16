@@ -4,8 +4,9 @@
  * - Clock/battery state updated every second (ULT-6)
  * - User preferences for layout alignment and theme (ULT-6)
  * - Dispatches gesture-triggered system actions:
- *   swipe-up web search (ULT-16), swipe-down notification shade (ULT-17).
- * Covers: ULT-6, ULT-16, ULT-17
+ *   swipe-up web search (ULT-16), swipe-down notification shade (ULT-17),
+ *   double-tap screen lock (ULT-18).
+ * Covers: ULT-6, ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.ui.home
 
@@ -16,6 +17,7 @@ import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.UserPreferences
+import com.ultimatefocus.app.domain.service.LockResult
 import com.ultimatefocus.app.domain.service.SystemActions
 import com.ultimatefocus.app.util.getBatteryLevel
 import com.ultimatefocus.app.util.isCharging
@@ -59,6 +61,19 @@ class HomeViewModel @Inject constructor(
     /** Swipe-down on the home screen expands the system notification shade. */
     fun onSwipeDown() {
         systemActions.openNotificationShade()
+    }
+
+    /**
+     * Double-tap on the home screen locks the device when the feature is enabled.
+     * If device-admin permission is missing, also prompts for it so the next
+     * double-tap succeeds.
+     */
+    fun onDoubleTap() {
+        if (!preferences.value.doubleTapToLockEnabled) return
+        val result = systemActions.lockScreen()
+        if (result is LockResult.MissingPermission) {
+            systemActions.requestLockPermission()
+        }
     }
 
     private fun startClockLoop() {

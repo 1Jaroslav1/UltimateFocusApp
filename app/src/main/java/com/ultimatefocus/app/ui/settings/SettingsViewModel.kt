@@ -1,8 +1,10 @@
 /**
  * ViewModel that exposes user preferences and provides actions to update them.
  * Used by LauncherActivity to apply the theme before rendering any screen.
- * Also exposes the list of discovered web-search providers (ULT-16).
- * Covers: ULT-6, ULT-8, ULT-16
+ * Also exposes the list of discovered web-search providers (ULT-16) and the
+ * double-tap-to-lock toggle, which triggers a device-admin prompt when
+ * enabled without existing permission (ULT-18).
+ * Covers: ULT-6, ULT-8, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.ui.settings
 
@@ -48,6 +50,20 @@ class SettingsViewModel @Inject constructor(
     fun updateSearchProviderPackage(packageName: String?) {
         viewModelScope.launch {
             preferencesSource.updateSearchProviderPackage(packageName)
+        }
+    }
+
+    /**
+     * Enable or disable double-tap-to-lock (ULT-18). When enabling without
+     * existing device-admin permission, the system prompt is launched so the
+     * feature is usable immediately.
+     */
+    fun setDoubleTapToLock(enabled: Boolean) {
+        if (enabled && !systemActions.isLockPermissionGranted()) {
+            systemActions.requestLockPermission()
+        }
+        viewModelScope.launch {
+            preferencesSource.updateDoubleTapToLock(enabled)
         }
     }
 }

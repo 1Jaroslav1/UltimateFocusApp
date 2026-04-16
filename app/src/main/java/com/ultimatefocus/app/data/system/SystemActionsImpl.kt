@@ -11,12 +11,15 @@
  */
 package com.ultimatefocus.app.data.system
 
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
 import com.ultimatefocus.app.domain.service.LockResult
 import com.ultimatefocus.app.domain.service.SystemActions
 import com.ultimatefocus.app.domain.service.WebSearchProvider
+import com.ultimatefocus.app.receiver.LockDeviceAdminReceiver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -84,13 +87,37 @@ class SystemActionsImpl @Inject constructor(
             .toList()
     }
 
-    override fun lockScreen(): LockResult = LockResult.MissingPermission // ULT-18
-
-    override fun requestLockPermission() {
-        // Implemented in ULT-18.
+    override fun lockScreen(): LockResult {
+        val dpm = devicePolicyManager()
+        val admin = adminComponent()
+        if (!dpm.isAdminActive(admin)) return LockResult.MissingPermission
+        return runCatching {
+            dpm.lockNow()
+            LockResult.Success
+        }.getOrElse { LockResult.MissingPermission }
     }
 
-    override fun isLockPermissionGranted(): Boolean = false // ULT-18
+    override fun requestLockPermission() {
+        val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent())
+            putExtra(
+                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                "Grant screen-lock permission so double-tap on the home screen " +
+                    "can lock the device.",
+            )
+        }
+        runCatching { context.startActivity(intent) }
+    }
+
+    override fun isLockPermissionGranted(): Boolean =
+        devicePolicyManager().isAdminActive(adminComponent())
+
+    private fun devicePolicyManager(): DevicePolicyManager =
+        context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+
+    private fun adminComponent(): ComponentName =
+        ComponentName(context, LockDeviceAdminReceiver::class.java)
 
     private companion object {
         const val FALLBACK_URL = "https://www.google.com"

@@ -1,8 +1,9 @@
 /**
  * Settings screen. Exposes toggles for dark theme and auto-keyboard on app drawer
  * entry, a shortcut to the system launcher selector, and a Gestures section
- * controlling the swipe-up web-search provider (ULT-16).
- * Covers: ULT-8, ULT-16
+ * controlling the swipe-up web-search provider (ULT-16) and the
+ * double-tap-to-lock preference (ULT-18).
+ * Covers: ULT-8, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.ui.settings
 
@@ -115,6 +116,21 @@ fun SettingsScreen(
         HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
 
         SectionHeader("Gestures")
+
+        SettingsRow(
+            title = "Double-tap to lock",
+            subtitle = "Double-tapping the home screen locks the device. " +
+                "Requires device-admin permission on first enable.",
+            trailing = {
+                Switch(
+                    checked = preferences.doubleTapToLockEnabled,
+                    onCheckedChange = { viewModel.setDoubleTapToLock(it) },
+                    modifier = Modifier.testTag("double_tap_to_lock_switch"),
+                )
+            },
+        )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
 
         var showProviderDialog by remember { mutableStateOf(false) }
         val providerLabel = providerLabelFor(preferences.searchProviderPackage, viewModel)

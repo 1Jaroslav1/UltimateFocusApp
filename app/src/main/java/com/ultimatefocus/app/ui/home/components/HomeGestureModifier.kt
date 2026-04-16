@@ -1,15 +1,20 @@
 /**
- * Gesture-detection Modifier used by the home screen. Accumulates vertical
- * drag deltas and dispatches a single onSwipeUp / onSwipeDown callback on
- * gesture release, once the accumulated movement crosses SWIPE_THRESHOLD_DP.
+ * Gesture-detection Modifiers used by the home screen:
+ * - homeSwipeGestures accumulates vertical drag and dispatches onSwipeUp /
+ *   onSwipeDown once per gesture on release, when the accumulated movement
+ *   crosses SWIPE_THRESHOLD_DP.
+ * - homeDoubleTap fires the provided callback only when the double-tap
+ *   feature is enabled, relying on Compose's built-in double-tap window for
+ *   accidental-tap mitigation.
  *
- * Extracted so that both the production HomeScreen and instrumented tests
- * apply the exact same gesture logic.
+ * Extracted so production HomeScreen and instrumented tests apply identical
+ * gesture logic.
  *
- * Covers: ULT-16, ULT-17
+ * Covers: ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.ui.home.components
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -36,4 +41,18 @@ fun Modifier.homeSwipeGestures(
             }
         },
     ) { _, dy -> totalDy += dy }
+}
+
+/**
+ * Adds double-tap detection to this node that only fires when [enabled] is
+ * true. The gesture detector is keyed on [enabled] so a preference change
+ * toggles the listener on/off without restarting the composition.
+ * Single taps are ignored.
+ */
+fun Modifier.homeDoubleTap(
+    enabled: Boolean,
+    onDoubleTap: () -> Unit,
+): Modifier = this.pointerInput(enabled) {
+    if (!enabled) return@pointerInput
+    detectTapGestures(onDoubleTap = { onDoubleTap() })
 }
