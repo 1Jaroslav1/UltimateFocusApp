@@ -4,8 +4,8 @@
  * favorite apps as plain text labels with no icons (ULT-6).
  * Swipe-left opens the full app drawer (ULT-7).
  * Swipe-up launches the configured web-search provider (ULT-16).
- * Swipe-down opens the notification shade.
- * Covers: ULT-6, ULT-7, ULT-16
+ * Swipe-down opens the notification shade (ULT-17).
+ * Covers: ULT-6, ULT-7, ULT-16, ULT-17
  */
 package com.ultimatefocus.app.ui.home
 
@@ -35,7 +35,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import com.ultimatefocus.app.domain.model.AppInfo
@@ -44,7 +43,6 @@ import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
 import com.ultimatefocus.app.ui.home.components.ClockWidget
 import com.ultimatefocus.app.ui.home.components.FavoritesList
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
-import java.lang.reflect.Method
 import androidx.core.net.toUri
 
 @Composable
@@ -66,7 +64,7 @@ fun HomeScreen(
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .homeSwipeGestures(
                 onSwipeUp = { viewModel.onSwipeUp() },
-                onSwipeDown = { expandNotificationShade(context) },
+                onSwipeDown = { viewModel.onSwipeDown() },
             )
             .testTag("home_screen"),
     ) {
@@ -135,21 +133,5 @@ fun HomeScreen(
                 onDismiss = { showContextMenu = false },
             )
         }
-    }
-}
-
-/**
- * Expands the system notification shade. Uses reflection because the API is
- * hidden. Left inline in the home screen for now; will be migrated to
- * SystemActions.openNotificationShade() in ULT-17.
- */
-private fun expandNotificationShade(context: Context) {
-    try {
-        val service = context.getSystemService("statusbar")
-        val clazz = Class.forName("android.app.StatusBarManager")
-        val method: Method = clazz.getMethod("expandNotificationsPanel")
-        method.invoke(service)
-    } catch (_: Exception) {
-        /* not available on all devices */
     }
 }

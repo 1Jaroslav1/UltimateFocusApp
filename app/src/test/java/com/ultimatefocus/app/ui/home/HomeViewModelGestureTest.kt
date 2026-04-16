@@ -82,4 +82,20 @@ class HomeViewModelGestureTest {
 
         assertEquals(3, fakeSystemActions.searchOpenCount)
     }
+
+    // ── ULT-17 ───────────────────────────────────────────────────────────────
+
+    @Test
+    fun onSwipeDown_opensNotificationShade() = runTest {
+        viewModel.onSwipeDown()
+
+        assertEquals(1, fakeSystemActions.notificationShadeOpenCount)
+    }
+
+    @Test
+    fun onSwipeDown_isIndependentFromOnSwipeUp() = runTest {
+        viewModel.onSwipeDown()
+
+        assertEquals(0, fakeSystemActions.searchOpenCount)
+    }
 }

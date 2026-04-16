@@ -27,7 +27,15 @@ class SystemActionsImpl @Inject constructor(
 ) : SystemActions {
 
     override fun openNotificationShade() {
-        // Implemented in ULT-17.
+        // The API is hidden, so reflection is the standard approach used by
+        // minimal launchers. `StatusBarManager.expandNotificationsPanel()` is
+        // intentionally non-public but reliably present on stock Android.
+        runCatching {
+            val service = context.getSystemService("statusbar")
+            val clazz = Class.forName("android.app.StatusBarManager")
+            val method = clazz.getMethod("expandNotificationsPanel")
+            method.invoke(service)
+        }
     }
 
     override fun openWebSearch(providerPackage: String?) {

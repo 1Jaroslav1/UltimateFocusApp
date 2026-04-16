@@ -3,8 +3,9 @@
  * - Reactive favorite apps list (ULT-6)
  * - Clock/battery state updated every second (ULT-6)
  * - User preferences for layout alignment and theme (ULT-6)
- * - Dispatches gesture-triggered system actions: swipe-up web search (ULT-16).
- * Covers: ULT-6, ULT-16
+ * - Dispatches gesture-triggered system actions:
+ *   swipe-up web search (ULT-16), swipe-down notification shade (ULT-17).
+ * Covers: ULT-6, ULT-16, ULT-17
  */
 package com.ultimatefocus.app.ui.home
 
@@ -53,6 +54,11 @@ class HomeViewModel @Inject constructor(
     /** Swipe-up on the home screen launches the configured web-search provider. */
     fun onSwipeUp() {
         systemActions.openWebSearch(preferences.value.searchProviderPackage)
+    }
+
+    /** Swipe-down on the home screen expands the system notification shade. */
+    fun onSwipeDown() {
+        systemActions.openNotificationShade()
     }
 
     private fun startClockLoop() {
