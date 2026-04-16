@@ -1,7 +1,8 @@
 /**
  * ViewModel that exposes user preferences and provides actions to update them.
  * Used by LauncherActivity to apply the theme before rendering any screen.
- * Covers: ULT-6, ULT-8
+ * Also exposes the list of discovered web-search providers (ULT-16).
+ * Covers: ULT-6, ULT-8, ULT-16
  */
 package com.ultimatefocus.app.ui.settings
 
@@ -9,6 +10,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import com.ultimatefocus.app.domain.model.UserPreferences
+import com.ultimatefocus.app.domain.service.SystemActions
+import com.ultimatefocus.app.domain.service.WebSearchProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +22,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val preferencesSource: UserPreferencesSource,
+    private val systemActions: SystemActions,
 ) : ViewModel() {
 
     val preferences: StateFlow<UserPreferences> = preferencesSource.preferences
@@ -33,6 +37,17 @@ class SettingsViewModel @Inject constructor(
     fun toggleAutoKeyboard() {
         viewModelScope.launch {
             preferencesSource.updateAutoKeyboard(!preferences.value.autoKeyboard)
+        }
+    }
+
+    /** Installed apps that can handle the swipe-up search intent (ULT-16). */
+    fun availableSearchProviders(): List<WebSearchProvider> =
+        systemActions.queryWebSearchProviders()
+
+    /** null ⇒ "System default" (ULT-16). */
+    fun updateSearchProviderPackage(packageName: String?) {
+        viewModelScope.launch {
+            preferencesSource.updateSearchProviderPackage(packageName)
         }
     }
 }

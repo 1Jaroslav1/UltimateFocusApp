@@ -1,8 +1,8 @@
 /**
  * Hilt DI modules that wire together the data layer:
  * - DatabaseModule  : provides Room database and DAOs
- * - RepositoryModule: binds AppRepository interface to its implementation
- * Covers: ULT-5
+ * - RepositoryModule: binds AppRepository + UserPreferencesSource + SystemActions
+ * Covers: ULT-5, ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.di
 
@@ -13,7 +13,9 @@ import com.ultimatefocus.app.data.local.dao.FavoriteDao
 import com.ultimatefocus.app.data.preferences.UserPreferencesDataStore
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.data.repository.AppRepositoryImpl
+import com.ultimatefocus.app.data.system.SystemActionsImpl
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
+import com.ultimatefocus.app.domain.service.SystemActions
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -46,4 +48,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindUserPreferencesSource(impl: UserPreferencesDataStore): UserPreferencesSource
+
+    @Binds
+    @Singleton
+    abstract fun bindSystemActions(impl: SystemActionsImpl): SystemActions
 }

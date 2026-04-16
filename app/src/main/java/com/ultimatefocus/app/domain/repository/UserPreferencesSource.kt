@@ -2,7 +2,7 @@
  * Interface for reading and writing user preferences.
  * Decouples ViewModels from the DataStore implementation so they can be
  * unit-tested with a fake in-memory implementation.
- * Covers: ULT-6
+ * Covers: ULT-6, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.domain.repository
 
@@ -17,4 +17,6 @@ interface UserPreferencesSource {
     suspend fun updateFontSize(fontSize: FontSize)
     suspend fun updateHomeAlignment(alignment: HomeAlignment)
     suspend fun updateAutoKeyboard(enabled: Boolean)
+    suspend fun updateSearchProviderPackage(packageName: String?)
+    suspend fun updateDoubleTapToLock(enabled: Boolean)
 }

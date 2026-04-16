@@ -3,13 +3,13 @@
  * Displays a text clock with battery arc (ULT-6) and a scrollable list of
  * favorite apps as plain text labels with no icons (ULT-6).
  * Swipe-left opens the full app drawer (ULT-7).
+ * Swipe-up launches the configured web-search provider (ULT-16).
  * Swipe-down opens the notification shade.
- * Covers: ULT-6, ULT-7
+ * Covers: ULT-6, ULT-7, ULT-16
  */
 package com.ultimatefocus.app.ui.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,20 +30,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.provider.Settings
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.HomeAlignment
 import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
 import com.ultimatefocus.app.ui.home.components.ClockWidget
 import com.ultimatefocus.app.ui.home.components.FavoritesList
+import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
 import java.lang.reflect.Method
 import androidx.core.net.toUri
 
@@ -64,19 +64,10 @@ fun HomeScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .pointerInput(Unit) {
-                detectVerticalDragGestures { _, dragAmount ->
-                    if (dragAmount > 40) {
-                        // Swipe down → expand notification shade
-                        try {
-                            val service = context.getSystemService("statusbar")
-                            val clazz = Class.forName("android.app.StatusBarManager")
-                            val method: Method = clazz.getMethod("expandNotificationsPanel")
-                            method.invoke(service)
-                        } catch (_: Exception) { /* not available on all devices */ }
-                    }
-                }
-            }
+            .homeSwipeGestures(
+                onSwipeUp = { viewModel.onSwipeUp() },
+                onSwipeDown = { expandNotificationShade(context) },
+            )
             .testTag("home_screen"),
     ) {
         Column(
@@ -144,5 +135,21 @@ fun HomeScreen(
                 onDismiss = { showContextMenu = false },
             )
         }
+    }
+}
+
+/**
+ * Expands the system notification shade. Uses reflection because the API is
+ * hidden. Left inline in the home screen for now; will be migrated to
+ * SystemActions.openNotificationShade() in ULT-17.
+ */
+private fun expandNotificationShade(context: Context) {
+    try {
+        val service = context.getSystemService("statusbar")
+        val clazz = Class.forName("android.app.StatusBarManager")
+        val method: Method = clazz.getMethod("expandNotificationsPanel")
+        method.invoke(service)
+    } catch (_: Exception) {
+        /* not available on all devices */
     }
 }

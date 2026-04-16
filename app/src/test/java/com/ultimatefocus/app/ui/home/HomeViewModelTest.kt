@@ -11,6 +11,7 @@ import app.cash.turbine.test
 import com.ultimatefocus.app.data.repository.FakeAppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.repository.FakeUserPreferencesSource
+import com.ultimatefocus.app.domain.service.FakeSystemActions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -48,6 +49,7 @@ class HomeViewModelTest {
             application = android.app.Application(),
             appRepository = fakeRepository,
             preferencesSource = fakePreferences,
+            systemActions = FakeSystemActions(),
         )
     }
 
