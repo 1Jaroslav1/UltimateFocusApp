@@ -17,6 +17,7 @@ import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.UserPreferences
+import android.widget.Toast
 import com.ultimatefocus.app.domain.service.LockResult
 import com.ultimatefocus.app.domain.service.SystemActions
 import com.ultimatefocus.app.util.getBatteryLevel
@@ -67,12 +68,27 @@ class HomeViewModel @Inject constructor(
      * Two-finger double-tap on the home screen locks the device when the
      * feature is enabled. If device-admin permission is missing, prompts for
      * it so the next double-tap succeeds.
+     *
+     * Temporary diagnostic toasts (ULT-18) — removed once verified on device:
+     * - "Double-tap fired" confirms the pairing logic connected two taps.
+     * - "…feature OFF" means the pref was off even though the gesture fired.
+     * - "Locking screen…" means lockNow() reported Success.
      */
     fun onTwoFingerDoubleTap() {
-        if (!preferences.value.twoFingerDoubleTapToLockEnabled) return
-        val result = systemActions.lockScreen()
-        if (result is LockResult.MissingPermission) {
-            systemActions.requestLockPermission()
+        Toast.makeText(application, "Double-tap fired", Toast.LENGTH_SHORT).show()
+        if (!preferences.value.twoFingerDoubleTapToLockEnabled) {
+            Toast.makeText(
+                application,
+                "Double-tap fired — feature is OFF in settings",
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        when (val result = systemActions.lockScreen()) {
+            LockResult.Success -> Toast.makeText(
+                application, "Locking screen…", Toast.LENGTH_SHORT,
+            ).show()
+            LockResult.MissingPermission -> systemActions.requestLockPermission()
         }
     }
 

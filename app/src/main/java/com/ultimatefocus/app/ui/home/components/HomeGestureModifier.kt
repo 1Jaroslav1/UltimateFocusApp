@@ -73,6 +73,7 @@ fun Modifier.homeSwipeGestures(
 fun Modifier.homeTwoFingerDoubleTap(
     enabled: Boolean,
     onTwoFingerDoubleTap: () -> Unit,
+    onSingleTapForDebug: (() -> Unit)? = null,
 ): Modifier = this.pointerInput(enabled) {
     if (!enabled) return@pointerInput
     val slop = viewConfiguration.touchSlop
@@ -92,6 +93,7 @@ fun Modifier.homeTwoFingerDoubleTap(
                 previousTapEndMs = null
                 continue
             }
+            onSingleTapForDebug?.invoke()
             val (tapStart, tapEnd) = tap
             val prev = previousTapEndMs
             if (prev != null && tapStart - prev <= DOUBLE_TAP_GAP_MS) {
