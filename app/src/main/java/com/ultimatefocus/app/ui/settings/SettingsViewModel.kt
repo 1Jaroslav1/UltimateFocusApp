@@ -46,6 +46,13 @@ class SettingsViewModel @Inject constructor(
     fun availableSearchProviders(): List<WebSearchProvider> =
         systemActions.queryWebSearchProviders()
 
+    /**
+     * Whether the launcher currently holds the device-admin `force-lock`
+     * permission (ULT-18). Re-read by the Settings screen after the admin
+     * prompt closes so the UI reflects the new state without a reload.
+     */
+    fun isLockPermissionGranted(): Boolean = systemActions.isLockPermissionGranted()
+
     /** null ⇒ "System default" (ULT-16). */
     fun updateSearchProviderPackage(packageName: String?) {
         viewModelScope.launch {

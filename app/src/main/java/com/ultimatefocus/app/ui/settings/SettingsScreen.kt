@@ -140,10 +140,17 @@ fun SettingsScreen(
         // context), so the user never sees the admin dialog and has no way
         // to grant it. Launching from here uses LocalContext.current which
         // is the Activity, so the dialog comes up reliably.
+        // Subtitle re-reads isLockPermissionGranted() on each composition so
+        // the row shows ✓ Granted / ✗ Not granted without a manual reload.
+        val adminGranted = viewModel.isLockPermissionGranted()
         SettingsRow(
             title = "Grant screen-lock permission",
-            subtitle = "Opens the Android device-admin prompt. Required once " +
-                "before the two-finger double-tap can lock the screen.",
+            subtitle = if (adminGranted) {
+                "✓ Granted. The two-finger double-tap will now lock the device."
+            } else {
+                "✗ Not granted — tap here to open the device-admin prompt. " +
+                    "Required before the two-finger double-tap can lock the screen."
+            },
             onClick = {
                 val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
                     putExtra(
