@@ -1,11 +1,8 @@
 /**
  * Compose UI integration tests for the home-screen gesture modifiers.
- * Verifies swipe-up, swipe-down and two-finger-long-press dispatch, and
+ * Verifies swipe-up, swipe-down and two-finger-double-tap dispatch, and
  * that below-threshold, horizontal or disabled-feature interactions are
  * ignored.
- *
- * The long-press test uses `advanceEventTime` between down and up so the
- * synthetic gesture crosses the system long-press timeout.
  *
  * Covers: ULT-16, ULT-17, ULT-18
  */
@@ -24,7 +21,7 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
-import com.ultimatefocus.app.ui.home.components.homeTwoFingerLongPress
+import com.ultimatefocus.app.ui.home.components.homeTwoFingerDoubleTap
 import com.ultimatefocus.app.ui.theme.UltimateFocusTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -37,7 +34,11 @@ class HomeScreenGestureTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private class Counts(var up: Int = 0, var down: Int = 0, var twoFingerHold: Int = 0)
+    private class Counts(
+        var up: Int = 0,
+        var down: Int = 0,
+        var twoFingerDoubleTap: Int = 0,
+    )
 
     private fun setContentWithGestures(counts: Counts, twoFingerEnabled: Boolean = false) {
         composeRule.setContent {
@@ -49,9 +50,9 @@ class HomeScreenGestureTest {
                             onSwipeUp = { counts.up++ },
                             onSwipeDown = { counts.down++ },
                         )
-                        .homeTwoFingerLongPress(
+                        .homeTwoFingerDoubleTap(
                             enabled = twoFingerEnabled,
-                            onTwoFingerLongPress = { counts.twoFingerHold++ },
+                            onTwoFingerDoubleTap = { counts.twoFingerDoubleTap++ },
                         )
                         .testTag("gesture_box"),
                 )
@@ -119,84 +120,108 @@ class HomeScreenGestureTest {
         }
     }
 
-    // ── ULT-18: two-finger long-press ────────────────────────────────────────
+    // ── ULT-18: two-finger double-tap ────────────────────────────────────────
 
     @Test
-    fun twoFingerLongPress_whenEnabledAndHeld_dispatchesOnce() {
+    fun twoQuickTwoFingerTaps_whenEnabled_dispatchOnce() {
         val counts = Counts()
         setContentWithGestures(counts, twoFingerEnabled = true)
 
         composeRule.onNodeWithTag("gesture_box").performTouchInput {
             val p1 = center + Offset(-50f, 0f)
             val p2 = center + Offset(50f, 0f)
-            down(0, p1)
-            down(1, p2)
-            // Hold both fingers for > the system long-press timeout (~500 ms)
-            // by advancing the synthetic clock between no-op frames.
-            advanceEventTime(800L)
-            up(0)
-            up(1)
+            // Tap 1
+            down(0, p1); down(1, p2)
+            advanceEventTime(60L)
+            up(0); up(1)
+            // Small gap, then tap 2 — within DOUBLE_TAP_GAP_MS (400 ms).
+            advanceEventTime(150L)
+            down(0, p1); down(1, p2)
+            advanceEventTime(60L)
+            up(0); up(1)
         }
 
         composeRule.runOnIdle {
-            assertEquals(1, counts.twoFingerHold)
+            assertEquals(1, counts.twoFingerDoubleTap)
         }
     }
 
     @Test
-    fun twoFingerLongPress_whenDisabled_isIgnored() {
+    fun twoQuickTwoFingerTaps_whenDisabled_doNotDispatch() {
         val counts = Counts()
         setContentWithGestures(counts, twoFingerEnabled = false)
 
         composeRule.onNodeWithTag("gesture_box").performTouchInput {
             val p1 = center + Offset(-50f, 0f)
             val p2 = center + Offset(50f, 0f)
-            down(0, p1)
-            down(1, p2)
-            advanceEventTime(800L)
-            up(0)
-            up(1)
+            down(0, p1); down(1, p2)
+            advanceEventTime(60L)
+            up(0); up(1)
+            advanceEventTime(150L)
+            down(0, p1); down(1, p2)
+            advanceEventTime(60L)
+            up(0); up(1)
         }
 
         composeRule.runOnIdle {
-            assertEquals(0, counts.twoFingerHold)
+            assertEquals(0, counts.twoFingerDoubleTap)
         }
     }
 
     @Test
-    fun twoFingerTap_thatReleasesBeforeLongPressTimeout_doesNotFire() {
+    fun singleTwoFingerTap_doesNotDispatch() {
         val counts = Counts()
         setContentWithGestures(counts, twoFingerEnabled = true)
 
         composeRule.onNodeWithTag("gesture_box").performTouchInput {
             val p1 = center + Offset(-50f, 0f)
             val p2 = center + Offset(50f, 0f)
-            down(0, p1)
-            down(1, p2)
-            // Release well before the long-press timeout.
-            advanceEventTime(100L)
-            up(0)
-            up(1)
+            down(0, p1); down(1, p2)
+            advanceEventTime(60L)
+            up(0); up(1)
         }
 
         composeRule.runOnIdle {
-            assertEquals(0, counts.twoFingerHold)
+            assertEquals(0, counts.twoFingerDoubleTap)
         }
     }
 
     @Test
-    fun singleFingerLongPress_whenTwoFingerEnabled_doesNotDispatch() {
+    fun twoTwoFingerTaps_withLargeGap_doNotDispatch() {
         val counts = Counts()
         setContentWithGestures(counts, twoFingerEnabled = true)
 
         composeRule.onNodeWithTag("gesture_box").performTouchInput {
-            down(center)
-            advanceEventTime(800L)
-            up()
+            val p1 = center + Offset(-50f, 0f)
+            val p2 = center + Offset(50f, 0f)
+            down(0, p1); down(1, p2)
+            advanceEventTime(60L)
+            up(0); up(1)
+            // Gap >> DOUBLE_TAP_GAP_MS → not a pair.
+            advanceEventTime(2_000L)
+            down(0, p1); down(1, p2)
+            advanceEventTime(60L)
+            up(0); up(1)
         }
 
         composeRule.runOnIdle {
-            assertEquals(0, counts.twoFingerHold)
+            assertEquals(0, counts.twoFingerDoubleTap)
+        }
+    }
+
+    @Test
+    fun singleFingerDoubleTap_whenTwoFingerEnabled_doesNotDispatch() {
+        val counts = Counts()
+        setContentWithGestures(counts, twoFingerEnabled = true)
+
+        composeRule.onNodeWithTag("gesture_box").performTouchInput {
+            down(center); advanceEventTime(60L); up()
+            advanceEventTime(150L)
+            down(center); advanceEventTime(60L); up()
+        }
+
+        composeRule.runOnIdle {
+            assertEquals(0, counts.twoFingerDoubleTap)
         }
     }
 }

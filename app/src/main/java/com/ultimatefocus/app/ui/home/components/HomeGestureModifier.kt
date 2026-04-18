@@ -3,15 +3,17 @@
  * - homeSwipeGestures accumulates vertical drag and dispatches onSwipeUp /
  *   onSwipeDown once per gesture on release, when the accumulated movement
  *   crosses SWIPE_THRESHOLD_DP.
- * - homeTwoFingerLongPress fires onTwoFingerLongPress after two fingers have
- *   been held still (within touchSlop) on the screen for
- *   `viewConfiguration.longPressTimeoutMillis`. The previous single-finger
- *   double-tap and quick two-finger tap variants collided with the parent
- *   HorizontalPager's multi-touch arbitration on some devices; a sustained
- *   hold sidesteps that because the pager only reacts to horizontal drag.
+ * - homeTwoFingerDoubleTap fires onTwoFingerDoubleTap when the user performs
+ *   two consecutive two-finger taps within DOUBLE_TAP_GAP_MS. Each tap is a
+ *   brief press with at least two simultaneous fingers, released inside the
+ *   system long-press timeout and without drifting past touchSlop.
+ * - homeMultiTouchDebug is a temporary diagnostic that toasts "N fingers
+ *   detected" while we iterate on ULT-18 on-device; not wired into the
+ *   production home screen.
  *
- * Extracted so production HomeScreen and instrumented tests apply identical
- * gesture logic.
+ * All detectors await on PointerEventPass.Initial so events are observed
+ * before the parent HorizontalPager's Main-pass arbitration can claim
+ * multi-touch for a page drag.
  *
  * Covers: ULT-16, ULT-17, ULT-18
  */
@@ -23,16 +25,17 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.pointerInput
-import kotlinx.coroutines.withTimeoutOrNull
 
 /** Minimum accumulated vertical drag (in dp) that counts as a swipe. */
 const val SWIPE_THRESHOLD_DP: Float = 60f
 
-/** Max delay between the first and second finger landing to be treated as the same gesture. */
-const val TWO_FINGER_WINDOW_MS: Long = 400L
+/** Max gap between two-finger-tap #1 release and two-finger-tap #2 first down. */
+const val DOUBLE_TAP_GAP_MS: Long = 400L
 
 /**
  * Adds vertical-swipe detection to this node. The callbacks fire at most once
@@ -56,88 +59,100 @@ fun Modifier.homeSwipeGestures(
 }
 
 /**
- * Adds two-finger long-press detection to this node that only fires when
- * [enabled] is true. Keyed on [enabled] so a preference flip swaps the
- * listener on/off without a full recomposition.
+ * Adds two-finger double-tap detection to this node that only fires when
+ * [enabled] is true. The pointer input is keyed on [enabled] so a preference
+ * flip restarts the detector without requiring a full recomposition.
  *
- * Recognition rules (all must hold for the callback to fire):
- * - Two distinct fingers land on the node, with the second arriving within
- *   TWO_FINGER_WINDOW_MS of the first.
- * - Both fingers stay pressed for the system long-press timeout
- *   (`viewConfiguration.longPressTimeoutMillis`, usually ~500 ms).
- * - Neither finger drifts more than `viewConfiguration.touchSlop` from its
- *   down position during the hold.
- *
- * The callback fires exactly once per qualifying gesture, the moment the
- * long-press timer elapses with both fingers still held.
+ * One tap qualifies as "two-finger" when the gesture saw at least two
+ * simultaneous pointers pressed, no finger drifted past touchSlop, and every
+ * finger lifted within the system long-press timeout. Two such taps with a
+ * gap of at most DOUBLE_TAP_GAP_MS between the first release and the
+ * second's first-down fire the callback. Any non-qualifying gesture in
+ * between resets the pairing.
  */
-fun Modifier.homeTwoFingerLongPress(
+fun Modifier.homeTwoFingerDoubleTap(
     enabled: Boolean,
-    onTwoFingerLongPress: () -> Unit,
+    onTwoFingerDoubleTap: () -> Unit,
 ): Modifier = this.pointerInput(enabled) {
     if (!enabled) return@pointerInput
     val slop = viewConfiguration.touchSlop
     val slopSquared = slop * slop
-    val holdTimeoutMs = viewConfiguration.longPressTimeoutMillis
+    val tapTimeoutMs = viewConfiguration.longPressTimeoutMillis
 
-    awaitEachGesture {
-        // All awaits on the INITIAL pass so we see pointer events before the
-        // parent HorizontalPager's Main-pass arbitration decides to consume
-        // them. Critical on devices where the pager greedily claims the
-        // second finger for a page drag.
-        val first = awaitFirstDown(
-            requireUnconsumed = false,
-            pass = PointerEventPass.Initial,
-        )
-        val firstStart = first.position
-
-        // Phase 1 — wait for a second finger to land.
-        val second = withTimeoutOrNull(TWO_FINGER_WINDOW_MS) {
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                val other = event.changes.firstOrNull { it.id != first.id && it.pressed }
-                if (other != null) return@withTimeoutOrNull other
-                if (event.changes.all { !it.pressed }) return@withTimeoutOrNull null
-            }
-            @Suppress("UNREACHABLE_CODE") null
-        } ?: return@awaitEachGesture
-
-        val secondStart = second.position
-
-        // Phase 2 — require both fingers to stay held still for the long-press
-        // duration. If the inner block finishes (early return) we do NOT fire;
-        // if withTimeoutOrNull times out (null) both fingers held, so we fire.
-        val heldLongEnough = withTimeoutOrNull(holdTimeoutMs) {
-            while (true) {
-                val event = awaitPointerEvent(PointerEventPass.Initial)
-                val trackedLifted = event.changes.any { ch ->
-                    (ch.id == first.id || ch.id == second.id) && !ch.pressed
-                }
-                if (trackedLifted) return@withTimeoutOrNull false
-                val drifted = event.changes.any { ch ->
-                    val start = when (ch.id) {
-                        first.id -> firstStart
-                        second.id -> secondStart
-                        else -> return@any false
-                    }
-                    val dx = ch.position.x - start.x
-                    val dy = ch.position.y - start.y
-                    dx * dx + dy * dy > slopSquared
-                }
-                if (drifted) return@withTimeoutOrNull false
-            }
-            @Suppress("UNREACHABLE_CODE") true
+    var previousTapEndMs: Long? = null
+    while (true) {
+        val tap = recognizeTwoFingerTap(slopSquared, tapTimeoutMs)
+        if (tap == null) {
+            // Non-qualifying gesture — abandon any pending pairing.
+            previousTapEndMs = null
+            continue
         }
-        if (heldLongEnough == null) onTwoFingerLongPress()
+        val (tapStart, tapEnd) = tap
+        val prev = previousTapEndMs
+        if (prev != null && tapStart - prev <= DOUBLE_TAP_GAP_MS) {
+            previousTapEndMs = null
+            onTwoFingerDoubleTap()
+        } else {
+            previousTapEndMs = tapEnd
+        }
     }
+}
+
+/**
+ * Waits for the next gesture and decides whether it qualifies as a brief
+ * two-finger tap. Returns (startTime, endTime) on success, null otherwise.
+ *
+ * Kept as a top-level suspend extension so the detector can be called
+ * repeatedly from a single pointerInput loop without the awaitEachGesture
+ * convenience wrapper — which would force us back inside its own loop.
+ */
+private suspend fun AwaitPointerEventScope.recognizeTwoFingerTap(
+    slopSquared: Float,
+    tapTimeoutMs: Long,
+): Pair<Long, Long>? {
+    val first = awaitFirstDown(
+        requireUnconsumed = false,
+        pass = PointerEventPass.Initial,
+    )
+    val startTime = first.uptimeMillis
+    val starts: MutableMap<PointerId, Offset> = mutableMapOf(first.id to first.position)
+    var sawTwoFingers = false
+
+    while (true) {
+        val event = awaitPointerEvent(PointerEventPass.Initial)
+        val now = event.changes.maxOfOrNull { it.uptimeMillis } ?: startTime
+
+        // A long hold isn't a tap.
+        if (now - startTime > tapTimeoutMs) return null
+
+        event.changes.forEach { ch ->
+            if (ch.id !in starts && ch.pressed) {
+                starts[ch.id] = ch.position
+                if (starts.size >= 2) sawTwoFingers = true
+            }
+        }
+
+        val drifted = event.changes.any { ch ->
+            val start = starts[ch.id] ?: return@any false
+            val dx = ch.position.x - start.x
+            val dy = ch.position.y - start.y
+            dx * dx + dy * dy > slopSquared
+        }
+        if (drifted) return null
+
+        if (event.changes.none { it.pressed }) {
+            return if (sawTwoFingers) startTime to now else null
+        }
+    }
+    @Suppress("UNREACHABLE_CODE") return null
 }
 
 /**
  * Diagnostic-only Modifier that toasts "N fingers detected" the first time
  * each pointer count (≥ 2) is observed within a single gesture cycle.
- * Added while debugging ULT-18 on device — if the user sees the toast we
- * know multi-touch is reaching the Box and the real detector is the
- * suspect. If they don't, a parent node is swallowing the second finger.
+ * Not applied by the production HomeScreen any more now that Initial-pass
+ * multi-touch delivery has been confirmed on device, but kept here so it
+ * can be re-attached when a future gesture bug needs investigation.
  */
 fun Modifier.homeMultiTouchDebug(context: Context): Modifier = this.pointerInput(Unit) {
     awaitEachGesture {

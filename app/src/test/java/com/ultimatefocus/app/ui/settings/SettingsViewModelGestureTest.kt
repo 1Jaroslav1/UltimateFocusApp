@@ -81,45 +81,45 @@ class SettingsViewModelGestureTest {
         }
     }
 
-    // ── ULT-18: two-finger-long-press-to-lock ────────────────────────────────
+    // ── ULT-18: two-finger-double-tap-to-lock ────────────────────────────────
 
     @Test
-    fun `setTwoFingerLongPressToLock enables the preference`() = runTest {
+    fun `setTwoFingerDoubleTapToLock enables the preference`() = runTest {
         viewModel.preferences.test {
             awaitItem()
-            viewModel.setTwoFingerLongPressToLock(true)
-            assertEquals(true, awaitItem().twoFingerLongPressToLockEnabled)
+            viewModel.setTwoFingerDoubleTapToLock(true)
+            assertEquals(true, awaitItem().twoFingerDoubleTapToLockEnabled)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `setTwoFingerLongPressToLock to true when admin not granted triggers permission prompt`() {
+    fun `setTwoFingerDoubleTapToLock to true when admin not granted triggers permission prompt`() {
         fakeSystemActions.setAdminGranted(false)
 
-        viewModel.setTwoFingerLongPressToLock(true)
+        viewModel.setTwoFingerDoubleTapToLock(true)
 
         assertEquals(1, fakeSystemActions.requestLockPermissionCalls)
     }
 
     @Test
-    fun `setTwoFingerLongPressToLock to true when admin already granted does not reprompt`() {
+    fun `setTwoFingerDoubleTapToLock to true when admin already granted does not reprompt`() {
         fakeSystemActions.setAdminGranted(true)
 
-        viewModel.setTwoFingerLongPressToLock(true)
+        viewModel.setTwoFingerDoubleTapToLock(true)
 
         assertEquals(0, fakeSystemActions.requestLockPermissionCalls)
     }
 
     @Test
-    fun `setTwoFingerLongPressToLock to false disables the preference and does not prompt`() = runTest {
-        fakePreferences.setPreferences(UserPreferences(twoFingerLongPressToLockEnabled = true))
+    fun `setTwoFingerDoubleTapToLock to false disables the preference and does not prompt`() = runTest {
+        fakePreferences.setPreferences(UserPreferences(twoFingerDoubleTapToLockEnabled = true))
         fakeSystemActions.setAdminGranted(false)
 
         viewModel.preferences.test {
             awaitItem()
-            viewModel.setTwoFingerLongPressToLock(false)
-            assertEquals(false, awaitItem().twoFingerLongPressToLockEnabled)
+            viewModel.setTwoFingerDoubleTapToLock(false)
+            assertEquals(false, awaitItem().twoFingerDoubleTapToLockEnabled)
             cancelAndIgnoreRemainingEvents()
         }
         assertEquals(0, fakeSystemActions.requestLockPermissionCalls)

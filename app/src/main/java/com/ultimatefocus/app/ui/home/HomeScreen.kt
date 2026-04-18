@@ -5,7 +5,7 @@
  * Swipe-left opens the full app drawer (ULT-7).
  * Swipe-up launches the configured web-search provider (ULT-16).
  * Swipe-down opens the notification shade (ULT-17).
- * A two-finger long-press locks the device when the preference is enabled (ULT-18).
+ * A two-finger double-tap locks the device when the preference is enabled (ULT-18).
  * A tiny build-hash label in the bottom-right corner identifies the
  * currently installed build during on-device iteration.
  * Covers: ULT-6, ULT-7, ULT-16, ULT-17, ULT-18
@@ -47,9 +47,8 @@ import com.ultimatefocus.app.domain.model.HomeAlignment
 import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
 import com.ultimatefocus.app.ui.home.components.ClockWidget
 import com.ultimatefocus.app.ui.home.components.FavoritesList
-import com.ultimatefocus.app.ui.home.components.homeMultiTouchDebug
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
-import com.ultimatefocus.app.ui.home.components.homeTwoFingerLongPress
+import com.ultimatefocus.app.ui.home.components.homeTwoFingerDoubleTap
 import androidx.core.net.toUri
 
 @Composable
@@ -73,13 +72,10 @@ fun HomeScreen(
                 onSwipeUp = { viewModel.onSwipeUp() },
                 onSwipeDown = { viewModel.onSwipeDown() },
             )
-            .homeTwoFingerLongPress(
-                enabled = preferences.twoFingerLongPressToLockEnabled,
-                onTwoFingerLongPress = { viewModel.onTwoFingerLongPress() },
+            .homeTwoFingerDoubleTap(
+                enabled = preferences.twoFingerDoubleTapToLockEnabled,
+                onTwoFingerDoubleTap = { viewModel.onTwoFingerDoubleTap() },
             )
-            // Diagnostic: temporary multi-touch visibility while we debug
-            // ULT-18. Remove once the long-press is verified working.
-            .homeMultiTouchDebug(context)
             .testTag("home_screen"),
     ) {
         Column(

@@ -2,7 +2,7 @@
  * Settings screen. Exposes toggles for dark theme and auto-keyboard on app drawer
  * entry, a shortcut to the system launcher selector, and a Gestures section
  * controlling the swipe-up web-search provider (ULT-16) and the
- * two-finger-long-press-to-lock preference (ULT-18).
+ * two-finger-double-tap-to-lock preference (ULT-18).
  * Covers: ULT-8, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.ui.settings
@@ -118,15 +118,15 @@ fun SettingsScreen(
         SectionHeader("Gestures")
 
         SettingsRow(
-            title = "Two-finger long-press to lock",
-            subtitle = "Hold two fingers on the home screen for about half a " +
-                "second to lock the device. Requires device-admin permission " +
-                "on first enable.",
+            title = "Two-finger double-tap to lock",
+            subtitle = "Tap the home screen twice in quick succession with " +
+                "two fingers to lock the device. Requires device-admin " +
+                "permission on first enable.",
             trailing = {
                 Switch(
-                    checked = preferences.twoFingerLongPressToLockEnabled,
-                    onCheckedChange = { viewModel.setTwoFingerLongPressToLock(it) },
-                    modifier = Modifier.testTag("two_finger_long_press_to_lock_switch"),
+                    checked = preferences.twoFingerDoubleTapToLockEnabled,
+                    onCheckedChange = { viewModel.setTwoFingerDoubleTapToLock(it) },
+                    modifier = Modifier.testTag("two_finger_double_tap_to_lock_switch"),
                 )
             },
         )

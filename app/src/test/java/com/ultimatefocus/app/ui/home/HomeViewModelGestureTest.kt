@@ -102,33 +102,33 @@ class HomeViewModelGestureTest {
     // ── ULT-18 ───────────────────────────────────────────────────────────────
 
     @Test
-    fun onTwoFingerLongPress_whenDisabled_doesNothing() = runTest {
-        fakePreferences.setPreferences(UserPreferences(twoFingerLongPressToLockEnabled = false))
+    fun onTwoFingerDoubleTap_whenDisabled_doesNothing() = runTest {
+        fakePreferences.setPreferences(UserPreferences(twoFingerDoubleTapToLockEnabled = false))
         fakeSystemActions.setAdminGranted(true)
 
-        viewModel.onTwoFingerLongPress()
+        viewModel.onTwoFingerDoubleTap()
 
         assertEquals(0, fakeSystemActions.lockScreenCalls)
         assertEquals(0, fakeSystemActions.requestLockPermissionCalls)
     }
 
     @Test
-    fun onTwoFingerLongPress_whenEnabledAndGranted_locksScreen() = runTest {
-        fakePreferences.setPreferences(UserPreferences(twoFingerLongPressToLockEnabled = true))
+    fun onTwoFingerDoubleTap_whenEnabledAndGranted_locksScreen() = runTest {
+        fakePreferences.setPreferences(UserPreferences(twoFingerDoubleTapToLockEnabled = true))
         fakeSystemActions.setAdminGranted(true)
 
-        viewModel.onTwoFingerLongPress()
+        viewModel.onTwoFingerDoubleTap()
 
         assertEquals(1, fakeSystemActions.lockScreenCalls)
         assertEquals(0, fakeSystemActions.requestLockPermissionCalls)
     }
 
     @Test
-    fun onTwoFingerLongPress_whenEnabledButNotGranted_requestsPermission() = runTest {
-        fakePreferences.setPreferences(UserPreferences(twoFingerLongPressToLockEnabled = true))
+    fun onTwoFingerDoubleTap_whenEnabledButNotGranted_requestsPermission() = runTest {
+        fakePreferences.setPreferences(UserPreferences(twoFingerDoubleTapToLockEnabled = true))
         fakeSystemActions.setAdminGranted(false)
 
-        viewModel.onTwoFingerLongPress()
+        viewModel.onTwoFingerDoubleTap()
 
         // Still attempts the lock so we can react to MissingPermission,
         // and triggers the admin prompt so the user can grant access next time.

@@ -5,7 +5,7 @@
  * - User preferences for layout alignment and theme (ULT-6)
  * - Dispatches gesture-triggered system actions:
  *   swipe-up web search (ULT-16), swipe-down notification shade (ULT-17),
- *   two-finger long-press screen lock (ULT-18).
+ *   two-finger double-tap screen lock (ULT-18).
  * Covers: ULT-6, ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.ui.home
@@ -17,7 +17,6 @@ import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.UserPreferences
-import android.widget.Toast
 import com.ultimatefocus.app.domain.service.LockResult
 import com.ultimatefocus.app.domain.service.SystemActions
 import com.ultimatefocus.app.util.getBatteryLevel
@@ -65,32 +64,15 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Two-finger long-press on the home screen locks the device when the
+     * Two-finger double-tap on the home screen locks the device when the
      * feature is enabled. If device-admin permission is missing, prompts for
-     * it so the next hold succeeds.
-     *
-     * Diagnostic toasts (to be removed once ULT-18 is verified on device):
-     * - "Two-finger hold detected" confirms the gesture reached the VM.
-     * - "…feature off" means the gesture fired but the preference is disabled.
-     * - "…locking screen" means lockNow() returned Success — if the screen
-     *   does NOT actually turn off, the device silently ignored lockNow().
+     * it so the next double-tap succeeds.
      */
-    fun onTwoFingerLongPress() {
-        Toast.makeText(application, "Two-finger hold detected", Toast.LENGTH_SHORT).show()
-        if (!preferences.value.twoFingerLongPressToLockEnabled) {
-            Toast.makeText(
-                application,
-                "Two-finger hold detected — feature is OFF in settings",
-                Toast.LENGTH_LONG,
-            ).show()
-            return
-        }
+    fun onTwoFingerDoubleTap() {
+        if (!preferences.value.twoFingerDoubleTapToLockEnabled) return
         val result = systemActions.lockScreen()
-        when (result) {
-            LockResult.Success -> Toast.makeText(
-                application, "Locking screen…", Toast.LENGTH_SHORT,
-            ).show()
-            LockResult.MissingPermission -> systemActions.requestLockPermission()
+        if (result is LockResult.MissingPermission) {
+            systemActions.requestLockPermission()
         }
     }
 

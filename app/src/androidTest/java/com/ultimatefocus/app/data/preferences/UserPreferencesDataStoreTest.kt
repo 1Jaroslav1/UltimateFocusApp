@@ -1,7 +1,7 @@
 /**
  * Integration tests for UserPreferencesDataStore using a real DataStore instance.
  * Verifies default values, persistence of updates, and round-trip of
- * gesture-navigation preferences (search provider, two-finger-long-press-to-lock).
+ * gesture-navigation preferences (search provider, two-finger-double-tap-to-lock).
  * Covers: ULT-8, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.data.preferences
@@ -116,23 +116,23 @@ class UserPreferencesDataStoreTest {
         assertNull(dataStore.preferences.first().searchProviderPackage)
     }
 
-    // ── ULT-18: two-finger-long-press-to-lock ────────────────────────────────
+    // ── ULT-18: two-finger-double-tap-to-lock ────────────────────────────────
 
     @Test
-    fun defaultPreferences_twoFingerLongPressToLockIsFalse() = runTest {
-        assertFalse(dataStore.preferences.first().twoFingerLongPressToLockEnabled)
+    fun defaultPreferences_twoFingerDoubleTapToLockIsFalse() = runTest {
+        assertFalse(dataStore.preferences.first().twoFingerDoubleTapToLockEnabled)
     }
 
     @Test
-    fun updateTwoFingerLongPressToLock_persistsNewValue() = runTest {
-        dataStore.updateTwoFingerLongPressToLock(true)
-        assertTrue(dataStore.preferences.first().twoFingerLongPressToLockEnabled)
+    fun updateTwoFingerDoubleTapToLock_persistsNewValue() = runTest {
+        dataStore.updateTwoFingerDoubleTapToLock(true)
+        assertTrue(dataStore.preferences.first().twoFingerDoubleTapToLockEnabled)
     }
 
     @Test
-    fun updateTwoFingerLongPressToLock_toFalse_clearsPreviousValue() = runTest {
-        dataStore.updateTwoFingerLongPressToLock(true)
-        dataStore.updateTwoFingerLongPressToLock(false)
-        assertFalse(dataStore.preferences.first().twoFingerLongPressToLockEnabled)
+    fun updateTwoFingerDoubleTapToLock_toFalse_clearsPreviousValue() = runTest {
+        dataStore.updateTwoFingerDoubleTapToLock(true)
+        dataStore.updateTwoFingerDoubleTapToLock(false)
+        assertFalse(dataStore.preferences.first().twoFingerDoubleTapToLockEnabled)
     }
 }
