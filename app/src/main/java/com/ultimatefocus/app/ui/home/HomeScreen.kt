@@ -47,6 +47,7 @@ import com.ultimatefocus.app.domain.model.HomeAlignment
 import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
 import com.ultimatefocus.app.ui.home.components.ClockWidget
 import com.ultimatefocus.app.ui.home.components.FavoritesList
+import com.ultimatefocus.app.ui.home.components.homeMultiTouchDebug
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
 import com.ultimatefocus.app.ui.home.components.homeTwoFingerLongPress
 import androidx.core.net.toUri
@@ -76,6 +77,9 @@ fun HomeScreen(
                 enabled = preferences.twoFingerLongPressToLockEnabled,
                 onTwoFingerLongPress = { viewModel.onTwoFingerLongPress() },
             )
+            // Diagnostic: temporary multi-touch visibility while we debug
+            // ULT-18. Remove once the long-press is verified working.
+            .homeMultiTouchDebug(context)
             .testTag("home_screen"),
     ) {
         Column(
