@@ -79,21 +79,27 @@ fun Modifier.homeTwoFingerDoubleTap(
     val slopSquared = slop * slop
     val tapTimeoutMs = viewConfiguration.longPressTimeoutMillis
 
-    var previousTapEndMs: Long? = null
-    while (true) {
-        val tap = recognizeTwoFingerTap(slopSquared, tapTimeoutMs)
-        if (tap == null) {
-            // Non-qualifying gesture — abandon any pending pairing.
-            previousTapEndMs = null
-            continue
-        }
-        val (tapStart, tapEnd) = tap
-        val prev = previousTapEndMs
-        if (prev != null && tapStart - prev <= DOUBLE_TAP_GAP_MS) {
-            previousTapEndMs = null
-            onTwoFingerDoubleTap()
-        } else {
-            previousTapEndMs = tapEnd
+    // `recognizeTwoFingerTap` is an AwaitPointerEventScope extension, so we
+    // need to be inside awaitPointerEventScope — pointerInput itself only
+    // gives us PointerInputScope, which doesn't allow calling awaitPointerEvent
+    // directly.
+    awaitPointerEventScope {
+        var previousTapEndMs: Long? = null
+        while (true) {
+            val tap = recognizeTwoFingerTap(slopSquared, tapTimeoutMs)
+            if (tap == null) {
+                // Non-qualifying gesture — abandon any pending pairing.
+                previousTapEndMs = null
+                continue
+            }
+            val (tapStart, tapEnd) = tap
+            val prev = previousTapEndMs
+            if (prev != null && tapStart - prev <= DOUBLE_TAP_GAP_MS) {
+                previousTapEndMs = null
+                onTwoFingerDoubleTap()
+            } else {
+                previousTapEndMs = tapEnd
+            }
         }
     }
 }
