@@ -41,7 +41,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import android.provider.Settings
-import android.widget.Toast
 import com.ultimatefocus.app.BuildConfig
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.HomeAlignment
@@ -76,19 +75,6 @@ fun HomeScreen(
             .homeTwoFingerDoubleTap(
                 enabled = preferences.twoFingerDoubleTapToLockEnabled,
                 onTwoFingerDoubleTap = { viewModel.onTwoFingerDoubleTap() },
-                // Diagnostic: surfaces every qualifying single two-finger tap
-                // so we can tell whether both halves of a double-tap are being
-                // recognised vs. whether only one is. Remove once ULT-18 is
-                // verified working end-to-end.
-                onSingleTapForDebug = {
-                    Toast.makeText(context, "2-finger tap recognized", Toast.LENGTH_SHORT).show()
-                },
-                // Diagnostic: surfaces every reject reason from the single-tap
-                // recogniser so we can see WHY a gesture was dismissed when
-                // no other toast fires. Removed once ULT-18 works end-to-end.
-                onDebugEvent = { reason ->
-                    Toast.makeText(context, reason, Toast.LENGTH_SHORT).show()
-                },
             )
             .testTag("home_screen"),
     ) {

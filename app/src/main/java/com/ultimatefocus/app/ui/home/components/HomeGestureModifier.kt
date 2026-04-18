@@ -7,22 +7,15 @@
  *   two consecutive two-finger taps within DOUBLE_TAP_GAP_MS. Each tap is a
  *   brief press with at least two simultaneous fingers, released inside the
  *   system long-press timeout and without drifting past touchSlop.
- * - homeMultiTouchDebug is a temporary diagnostic that toasts "N fingers
- *   detected" while we iterate on ULT-18 on-device; not wired into the
- *   production home screen.
  *
- * All detectors await on PointerEventPass.Initial so events are observed
- * before the parent HorizontalPager's Main-pass arbitration can claim
- * multi-touch for a page drag.
+ * The double-tap detector awaits on PointerEventPass.Initial so events are
+ * observed before the parent HorizontalPager's Main-pass arbitration can
+ * claim multi-touch for a page drag.
  *
  * Covers: ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.ui.home.components
 
-import android.content.Context
-import android.widget.Toast
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -80,15 +73,7 @@ fun Modifier.homeSwipeGestures(
 fun Modifier.homeTwoFingerDoubleTap(
     enabled: Boolean,
     onTwoFingerDoubleTap: () -> Unit,
-    onSingleTapForDebug: (() -> Unit)? = null,
-    onDebugEvent: ((String) -> Unit)? = null,
 ): Modifier = this.pointerInput(enabled) {
-    // Fires on every coroutine start so we can tell whether the modifier is
-    // armed or whether the stored preference is OFF. Keyed on `enabled`, so
-    // the coroutine restarts (and retoasts) whenever the pref flips.
-    onDebugEvent?.invoke(
-        if (enabled) "detector armed" else "detector OFF (toggle in Settings)",
-    )
     if (!enabled) return@pointerInput
     val slop = viewConfiguration.touchSlop
     val slopSquared = slop * slop
@@ -101,25 +86,16 @@ fun Modifier.homeTwoFingerDoubleTap(
     awaitPointerEventScope {
         var previousTapEndMs: Long? = null
         while (true) {
-            val tap = recognizeTwoFingerTap(slopSquared, tapTimeoutMs, onDebugEvent)
+            val tap = recognizeTwoFingerTap(slopSquared, tapTimeoutMs)
             if (tap == null) {
-                // Non-qualifying gesture — abandon any pending pairing.
                 previousTapEndMs = null
                 continue
             }
-            onSingleTapForDebug?.invoke()
             val (tapStart, tapEnd) = tap
             val prev = previousTapEndMs
-            if (prev != null) {
-                val gap = tapStart - prev
-                if (gap <= DOUBLE_TAP_GAP_MS) {
-                    onDebugEvent?.invoke("gap ${gap}ms → pair")
-                    previousTapEndMs = null
-                    onTwoFingerDoubleTap()
-                } else {
-                    onDebugEvent?.invoke("gap ${gap}ms → too slow, restarting")
-                    previousTapEndMs = tapEnd
-                }
+            if (prev != null && tapStart - prev <= DOUBLE_TAP_GAP_MS) {
+                previousTapEndMs = null
+                onTwoFingerDoubleTap()
             } else {
                 previousTapEndMs = tapEnd
             }
@@ -141,7 +117,6 @@ fun Modifier.homeTwoFingerDoubleTap(
 private suspend fun AwaitPointerEventScope.recognizeTwoFingerTap(
     slopSquared: Float,
     tapTimeoutMs: Long,
-    onDebugEvent: ((String) -> Unit)? = null,
 ): Pair<Long, Long>? {
     var event: PointerEvent
     do {
@@ -152,10 +127,7 @@ private suspend fun AwaitPointerEventScope.recognizeTwoFingerTap(
     event.changes.forEach { ch ->
         if (ch.pressed) starts[ch.id] = ch.position
     }
-    if (starts.isEmpty()) {
-        onDebugEvent?.invoke("reject: first event had no pressed pointers")
-        return null
-    }
+    if (starts.isEmpty()) return null
     val startTime = event.changes.filter { it.pressed }.minOf { it.uptimeMillis }
     var sawTwoFingers = starts.size >= 2
 
@@ -163,10 +135,7 @@ private suspend fun AwaitPointerEventScope.recognizeTwoFingerTap(
         event = awaitPointerEvent(PointerEventPass.Initial)
         val now = event.changes.maxOfOrNull { it.uptimeMillis } ?: startTime
 
-        if (now - startTime > tapTimeoutMs) {
-            onDebugEvent?.invoke("reject: > ${tapTimeoutMs}ms (hold, not tap)")
-            return null
-        }
+        if (now - startTime > tapTimeoutMs) return null
 
         event.changes.forEach { ch ->
             if (ch.id !in starts && ch.pressed) {
@@ -181,44 +150,11 @@ private suspend fun AwaitPointerEventScope.recognizeTwoFingerTap(
             val dy = ch.position.y - start.y
             dx * dx + dy * dy > slopSquared
         }
-        if (drifted) {
-            onDebugEvent?.invoke("reject: finger drifted past touchSlop")
-            return null
-        }
+        if (drifted) return null
 
         if (event.changes.none { it.pressed }) {
-            return if (sawTwoFingers) {
-                startTime to now
-            } else {
-                onDebugEvent?.invoke("reject: released with only 1 finger seen")
-                null
-            }
+            return if (sawTwoFingers) startTime to now else null
         }
     }
     @Suppress("UNREACHABLE_CODE") return null
-}
-
-/**
- * Diagnostic-only Modifier that toasts "N fingers detected" the first time
- * each pointer count (≥ 2) is observed within a single gesture cycle.
- * Not applied by the production HomeScreen any more now that Initial-pass
- * multi-touch delivery has been confirmed on device, but kept here so it
- * can be re-attached when a future gesture bug needs investigation.
- */
-fun Modifier.homeMultiTouchDebug(context: Context): Modifier = this.pointerInput(Unit) {
-    awaitEachGesture {
-        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        val seenIds = mutableSetOf<PointerId>()
-        var lastToastedCount = 0
-        while (true) {
-            val event = awaitPointerEvent(PointerEventPass.Initial)
-            event.changes.forEach { if (it.pressed) seenIds.add(it.id) }
-            val concurrent = event.changes.count { it.pressed }
-            if (concurrent >= 2 && concurrent > lastToastedCount) {
-                lastToastedCount = concurrent
-                Toast.makeText(context, "$concurrent fingers detected", Toast.LENGTH_SHORT).show()
-            }
-            if (event.changes.none { it.pressed }) return@awaitEachGesture
-        }
-    }
 }
