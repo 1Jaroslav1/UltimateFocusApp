@@ -8,18 +8,19 @@ plugins {
 
 /**
  * Short git HEAD hash (7 chars) resolved at configuration time, or "dev" when
- * git is unavailable or the working tree is outside a repository. Uses a raw
- * ProcessBuilder so the script doesn't depend on Gradle's `exec { }` — that
- * helper is not in scope inside a Kotlin-DSL script body in Gradle 8+.
+ * git is unavailable or the working tree is outside a repository.
+ *
+ * Uses `providers.exec { }` rather than raw ProcessBuilder or Gradle's
+ * top-level `exec { }` because Gradle 9's configuration cache forbids
+ * un-tracked external processes at configuration time — providers.exec is the
+ * CC-aware entry point (the produced provider is registered as a cache input).
  */
 val gitShortHash: String = runCatching {
-    val process = ProcessBuilder("git", "rev-parse", "--short=7", "HEAD")
-        .directory(rootDir)
-        .redirectErrorStream(true)
-        .start()
-    val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
-    process.waitFor()
-    output.ifEmpty { "dev" }
+    providers.exec {
+        commandLine("git", "rev-parse", "--short=7", "HEAD")
+        workingDir = rootDir
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().ifEmpty { "dev" }
 }.getOrDefault("dev")
 
 android {
