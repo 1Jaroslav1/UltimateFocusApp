@@ -6,6 +6,8 @@
  * Swipe-up launches the configured web-search provider (ULT-16).
  * Swipe-down opens the notification shade (ULT-17).
  * A two-finger tap locks the device when the preference is enabled (ULT-18).
+ * A tiny build-hash label in the bottom-right corner identifies the
+ * currently installed build during on-device iteration.
  * Covers: ULT-6, ULT-7, ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.ui.home
@@ -34,10 +36,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import android.provider.Settings
+import com.ultimatefocus.app.BuildConfig
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.HomeAlignment
 import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
@@ -139,5 +143,19 @@ fun HomeScreen(
                 onDismiss = { showContextMenu = false },
             )
         }
+
+        // Build-version tag. Shows the git HEAD short hash (or "dev" when
+        // built outside git) so it's obvious which build is installed while
+        // iterating on device-specific bugs. Opaque on purpose (alpha 0.35)
+        // so it doesn't distract from the minimal layout.
+        Text(
+            text = BuildConfig.GIT_HASH,
+            fontSize = 9.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .testTag("build_hash"),
+        )
     }
 }

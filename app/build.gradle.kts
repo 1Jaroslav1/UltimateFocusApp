@@ -1,3 +1,5 @@
+import java.io.ByteArrayOutputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,17 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
 }
+
+/** Short git HEAD hash (7 chars) at configuration time, or "dev" when unavailable. */
+val gitShortHash: String = runCatching {
+    val stdout = ByteArrayOutputStream()
+    exec {
+        commandLine("git", "rev-parse", "--short=7", "HEAD")
+        standardOutput = stdout
+        isIgnoreExitValue = true
+    }
+    stdout.toString(Charsets.UTF_8).trim().ifEmpty { "dev" }
+}.getOrDefault("dev")
 
 android {
     namespace = "com.ultimatefocus.app"
@@ -18,6 +31,11 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "com.ultimatefocus.app.HiltTestRunner"
+
+        // Exposes the current git HEAD short hash (or "dev") to runtime code so
+        // the home screen can show which build is installed — useful while
+        // iterating on device-specific gesture bugs. See HomeScreen.kt (ULT-18).
+        buildConfigField("String", "GIT_HASH", "\"$gitShortHash\"")
     }
 
     buildTypes {
@@ -39,6 +57,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
