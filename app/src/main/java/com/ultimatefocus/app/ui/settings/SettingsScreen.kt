@@ -7,8 +7,11 @@
  */
 package com.ultimatefocus.app.ui.settings
 
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
+import com.ultimatefocus.app.receiver.LockDeviceAdminReceiver
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -129,6 +132,33 @@ fun SettingsScreen(
                     modifier = Modifier.testTag("two_finger_double_tap_to_lock_switch"),
                 )
             },
+        )
+
+        // A direct "grant permission" row, always tappable. Needed because on
+        // newer Android / some OEMs the startActivity call SettingsViewModel
+        // fires when the switch flips is silently blocked (non-Activity
+        // context), so the user never sees the admin dialog and has no way
+        // to grant it. Launching from here uses LocalContext.current which
+        // is the Activity, so the dialog comes up reliably.
+        SettingsRow(
+            title = "Grant screen-lock permission",
+            subtitle = "Opens the Android device-admin prompt. Required once " +
+                "before the two-finger double-tap can lock the screen.",
+            onClick = {
+                val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                    putExtra(
+                        DevicePolicyManager.EXTRA_DEVICE_ADMIN,
+                        ComponentName(context, LockDeviceAdminReceiver::class.java),
+                    )
+                    putExtra(
+                        DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                        "Grant screen-lock permission so the two-finger " +
+                            "double-tap on the home screen can lock the device.",
+                    )
+                }
+                context.startActivity(intent)
+            },
+            modifier = Modifier.testTag("grant_lock_permission_row"),
         )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
