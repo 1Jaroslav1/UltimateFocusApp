@@ -1,7 +1,7 @@
 /**
  * Integration tests for UserPreferencesDataStore using a real DataStore instance.
  * Verifies default values, persistence of updates, and round-trip of
- * gesture-navigation preferences (search provider, two-finger-tap-to-lock).
+ * gesture-navigation preferences (search provider, two-finger-long-press-to-lock).
  * Covers: ULT-8, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.data.preferences
@@ -116,23 +116,23 @@ class UserPreferencesDataStoreTest {
         assertNull(dataStore.preferences.first().searchProviderPackage)
     }
 
-    // ── ULT-18: two-finger-tap-to-lock ───────────────────────────────────────
+    // ── ULT-18: two-finger-long-press-to-lock ────────────────────────────────
 
     @Test
-    fun defaultPreferences_twoFingerTapToLockIsFalse() = runTest {
-        assertFalse(dataStore.preferences.first().twoFingerTapToLockEnabled)
+    fun defaultPreferences_twoFingerLongPressToLockIsFalse() = runTest {
+        assertFalse(dataStore.preferences.first().twoFingerLongPressToLockEnabled)
     }
 
     @Test
-    fun updateTwoFingerTapToLock_persistsNewValue() = runTest {
-        dataStore.updateTwoFingerTapToLock(true)
-        assertTrue(dataStore.preferences.first().twoFingerTapToLockEnabled)
+    fun updateTwoFingerLongPressToLock_persistsNewValue() = runTest {
+        dataStore.updateTwoFingerLongPressToLock(true)
+        assertTrue(dataStore.preferences.first().twoFingerLongPressToLockEnabled)
     }
 
     @Test
-    fun updateTwoFingerTapToLock_toFalse_clearsPreviousValue() = runTest {
-        dataStore.updateTwoFingerTapToLock(true)
-        dataStore.updateTwoFingerTapToLock(false)
-        assertFalse(dataStore.preferences.first().twoFingerTapToLockEnabled)
+    fun updateTwoFingerLongPressToLock_toFalse_clearsPreviousValue() = runTest {
+        dataStore.updateTwoFingerLongPressToLock(true)
+        dataStore.updateTwoFingerLongPressToLock(false)
+        assertFalse(dataStore.preferences.first().twoFingerLongPressToLockEnabled)
     }
 }

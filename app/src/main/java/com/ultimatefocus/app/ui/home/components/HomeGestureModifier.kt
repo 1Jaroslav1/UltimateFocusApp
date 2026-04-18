@@ -3,14 +3,12 @@
  * - homeSwipeGestures accumulates vertical drag and dispatches onSwipeUp /
  *   onSwipeDown once per gesture on release, when the accumulated movement
  *   crosses SWIPE_THRESHOLD_DP.
- * - homeTwoFingerTap fires onTwoFingerTap when two fingers land on the screen
- *   during the same short gesture and both lift without significant drag or
- *   exceeding the long-press timeout. The previous single-finger double-tap
- *   handler did not fire reliably in the launcher context, and a strict
- *   "must arrive within 200 ms" window made the replacement too picky in
- *   practice — all we require now is that both fingers come down before
- *   either lifts, and the whole gesture completes within the tap timeout
- *   (ULT-18).
+ * - homeTwoFingerLongPress fires onTwoFingerLongPress after two fingers have
+ *   been held still (within touchSlop) on the screen for
+ *   `viewConfiguration.longPressTimeoutMillis`. The previous single-finger
+ *   double-tap and quick two-finger tap variants collided with the parent
+ *   HorizontalPager's multi-touch arbitration on some devices; a sustained
+ *   hold sidesteps that because the pager only reacts to horizontal drag.
  *
  * Extracted so production HomeScreen and instrumented tests apply identical
  * gesture logic.
@@ -23,12 +21,14 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Minimum accumulated vertical drag (in dp) that counts as a swipe. */
 const val SWIPE_THRESHOLD_DP: Float = 60f
+
+/** Max delay between the first and second finger landing to be treated as the same gesture. */
+const val TWO_FINGER_WINDOW_MS: Long = 400L
 
 /**
  * Adds vertical-swipe detection to this node. The callbacks fire at most once
@@ -52,61 +52,71 @@ fun Modifier.homeSwipeGestures(
 }
 
 /**
- * Adds two-finger-tap detection to this node that only fires when [enabled]
- * is true. The gesture detector is keyed on [enabled] so a preference change
- * toggles the listener on/off without restarting the composition.
+ * Adds two-finger long-press detection to this node that only fires when
+ * [enabled] is true. Keyed on [enabled] so a preference flip swaps the
+ * listener on/off without a full recomposition.
  *
  * Recognition rules (all must hold for the callback to fire):
- * - At least two distinct fingers are pressed during the gesture. The second
- *   finger may arrive after the first — the only bound is the tap timeout.
- * - No finger drifts more than `viewConfiguration.touchSlop` from its down
- *   position (i.e. the user tapped, did not swipe).
- * - All fingers lift within `viewConfiguration.longPressTimeoutMillis` of the
- *   first down (i.e. the user tapped, did not long-press).
+ * - Two distinct fingers land on the node, with the second arriving within
+ *   TWO_FINGER_WINDOW_MS of the first.
+ * - Both fingers stay pressed for the system long-press timeout
+ *   (`viewConfiguration.longPressTimeoutMillis`, usually ~500 ms).
+ * - Neither finger drifts more than `viewConfiguration.touchSlop` from its
+ *   down position during the hold.
+ *
+ * The callback fires exactly once per qualifying gesture, the moment the
+ * long-press timer elapses with both fingers still held.
  */
-fun Modifier.homeTwoFingerTap(
+fun Modifier.homeTwoFingerLongPress(
     enabled: Boolean,
-    onTwoFingerTap: () -> Unit,
+    onTwoFingerLongPress: () -> Unit,
 ): Modifier = this.pointerInput(enabled) {
     if (!enabled) return@pointerInput
     val slop = viewConfiguration.touchSlop
     val slopSquared = slop * slop
-    val tapTimeoutMs = viewConfiguration.longPressTimeoutMillis
+    val holdTimeoutMs = viewConfiguration.longPressTimeoutMillis
 
     awaitEachGesture {
-        val firstDown = awaitFirstDown(requireUnconsumed = false)
-        val startTime = firstDown.uptimeMillis
-        val starts: MutableMap<PointerId, Offset> = mutableMapOf(firstDown.id to firstDown.position)
+        val first = awaitFirstDown(requireUnconsumed = false)
+        val firstStart = first.position
 
-        while (true) {
-            val event = awaitPointerEvent()
-            val now = event.changes.maxOfOrNull { it.uptimeMillis } ?: startTime
+        // Phase 1 — wait for a second finger to land.
+        val second = withTimeoutOrNull(TWO_FINGER_WINDOW_MS) {
+            while (true) {
+                val event = awaitPointerEvent()
+                val other = event.changes.firstOrNull { it.id != first.id && it.pressed }
+                if (other != null) return@withTimeoutOrNull other
+                if (event.changes.all { !it.pressed }) return@withTimeoutOrNull null
+            }
+            @Suppress("UNREACHABLE_CODE") null
+        } ?: return@awaitEachGesture
 
-            // Bail if the user is clearly doing a long-press instead of a tap.
-            if (now - startTime > tapTimeoutMs) return@awaitEachGesture
+        val secondStart = second.position
 
-            // Track every new finger that comes down during the window.
-            event.changes.forEach { change ->
-                if (change.id !in starts && change.pressed) {
-                    starts[change.id] = change.position
+        // Phase 2 — require both fingers to stay held still for the long-press
+        // duration. If the inner block finishes (early return) we do NOT fire;
+        // if withTimeoutOrNull times out (null) both fingers held, so we fire.
+        val heldLongEnough = withTimeoutOrNull(holdTimeoutMs) {
+            while (true) {
+                val event = awaitPointerEvent()
+                val trackedLifted = event.changes.any { ch ->
+                    (ch.id == first.id || ch.id == second.id) && !ch.pressed
                 }
+                if (trackedLifted) return@withTimeoutOrNull false
+                val drifted = event.changes.any { ch ->
+                    val start = when (ch.id) {
+                        first.id -> firstStart
+                        second.id -> secondStart
+                        else -> return@any false
+                    }
+                    val dx = ch.position.x - start.x
+                    val dy = ch.position.y - start.y
+                    dx * dx + dy * dy > slopSquared
+                }
+                if (drifted) return@withTimeoutOrNull false
             }
-
-            // Abort on drift so a swipe doesn't count as a two-finger tap.
-            val drifted = event.changes.any { change ->
-                val start = starts[change.id] ?: return@any false
-                val dx = change.position.x - start.x
-                val dy = change.position.y - start.y
-                dx * dx + dy * dy > slopSquared
-            }
-            if (drifted) return@awaitEachGesture
-
-            // When every tracked finger has lifted, fire only if at least two
-            // distinct fingers were ever seen.
-            if (event.changes.none { it.pressed }) {
-                if (starts.size >= 2) onTwoFingerTap()
-                return@awaitEachGesture
-            }
+            @Suppress("UNREACHABLE_CODE") true
         }
+        if (heldLongEnough == null) onTwoFingerLongPress()
     }
 }

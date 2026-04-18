@@ -5,7 +5,7 @@
  * Swipe-left opens the full app drawer (ULT-7).
  * Swipe-up launches the configured web-search provider (ULT-16).
  * Swipe-down opens the notification shade (ULT-17).
- * A two-finger tap locks the device when the preference is enabled (ULT-18).
+ * A two-finger long-press locks the device when the preference is enabled (ULT-18).
  * A tiny build-hash label in the bottom-right corner identifies the
  * currently installed build during on-device iteration.
  * Covers: ULT-6, ULT-7, ULT-16, ULT-17, ULT-18
@@ -48,7 +48,7 @@ import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
 import com.ultimatefocus.app.ui.home.components.ClockWidget
 import com.ultimatefocus.app.ui.home.components.FavoritesList
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
-import com.ultimatefocus.app.ui.home.components.homeTwoFingerTap
+import com.ultimatefocus.app.ui.home.components.homeTwoFingerLongPress
 import androidx.core.net.toUri
 
 @Composable
@@ -72,9 +72,9 @@ fun HomeScreen(
                 onSwipeUp = { viewModel.onSwipeUp() },
                 onSwipeDown = { viewModel.onSwipeDown() },
             )
-            .homeTwoFingerTap(
-                enabled = preferences.twoFingerTapToLockEnabled,
-                onTwoFingerTap = { viewModel.onTwoFingerTap() },
+            .homeTwoFingerLongPress(
+                enabled = preferences.twoFingerLongPressToLockEnabled,
+                onTwoFingerLongPress = { viewModel.onTwoFingerLongPress() },
             )
             .testTag("home_screen"),
     ) {

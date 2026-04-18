@@ -36,7 +36,7 @@ class UserPreferencesDataStore @Inject constructor(
         val HOME_ALIGNMENT = stringPreferencesKey("home_alignment")
         val AUTO_KEYBOARD = booleanPreferencesKey("auto_keyboard")
         val SEARCH_PROVIDER_PACKAGE = stringPreferencesKey("search_provider_package")
-        val TWO_FINGER_TAP_TO_LOCK = booleanPreferencesKey("two_finger_tap_to_lock")
+        val TWO_FINGER_LONG_PRESS_TO_LOCK = booleanPreferencesKey("two_finger_long_press_to_lock")
     }
 
     override val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -47,7 +47,7 @@ class UserPreferencesDataStore @Inject constructor(
                 ?: HomeAlignment.LEFT,
             autoKeyboard = prefs[Keys.AUTO_KEYBOARD] ?: true,
             searchProviderPackage = prefs[Keys.SEARCH_PROVIDER_PACKAGE],
-            twoFingerTapToLockEnabled = prefs[Keys.TWO_FINGER_TAP_TO_LOCK] ?: false,
+            twoFingerLongPressToLockEnabled = prefs[Keys.TWO_FINGER_LONG_PRESS_TO_LOCK] ?: false,
         )
     }
 
@@ -74,7 +74,7 @@ class UserPreferencesDataStore @Inject constructor(
         }
     }
 
-    override suspend fun updateTwoFingerTapToLock(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.TWO_FINGER_TAP_TO_LOCK] = enabled }
+    override suspend fun updateTwoFingerLongPressToLock(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.TWO_FINGER_LONG_PRESS_TO_LOCK] = enabled }
     }
 }

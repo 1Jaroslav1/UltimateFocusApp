@@ -5,7 +5,7 @@
  * - User preferences for layout alignment and theme (ULT-6)
  * - Dispatches gesture-triggered system actions:
  *   swipe-up web search (ULT-16), swipe-down notification shade (ULT-17),
- *   two-finger-tap screen lock (ULT-18).
+ *   two-finger long-press screen lock (ULT-18).
  * Covers: ULT-6, ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.ui.home
@@ -65,22 +65,22 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Two-finger tap on the home screen locks the device when the feature is
-     * enabled. If device-admin permission is missing, also prompts for it so
-     * the next tap succeeds.
+     * Two-finger long-press on the home screen locks the device when the
+     * feature is enabled. If device-admin permission is missing, prompts for
+     * it so the next hold succeeds.
      *
      * Diagnostic toasts (to be removed once ULT-18 is verified on device):
-     * - "Two-finger tap detected" confirms the gesture reached the VM.
+     * - "Two-finger hold detected" confirms the gesture reached the VM.
      * - "…feature off" means the gesture fired but the preference is disabled.
      * - "…locking screen" means lockNow() returned Success — if the screen
      *   does NOT actually turn off, the device silently ignored lockNow().
      */
-    fun onTwoFingerTap() {
-        Toast.makeText(application, "Two-finger tap detected", Toast.LENGTH_SHORT).show()
-        if (!preferences.value.twoFingerTapToLockEnabled) {
+    fun onTwoFingerLongPress() {
+        Toast.makeText(application, "Two-finger hold detected", Toast.LENGTH_SHORT).show()
+        if (!preferences.value.twoFingerLongPressToLockEnabled) {
             Toast.makeText(
                 application,
-                "Two-finger tap detected — feature is OFF in settings",
+                "Two-finger hold detected — feature is OFF in settings",
                 Toast.LENGTH_LONG,
             ).show()
             return
