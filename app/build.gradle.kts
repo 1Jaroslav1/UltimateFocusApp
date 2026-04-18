@@ -1,5 +1,3 @@
-import java.io.ByteArrayOutputStream
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -8,15 +6,20 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-/** Short git HEAD hash (7 chars) at configuration time, or "dev" when unavailable. */
+/**
+ * Short git HEAD hash (7 chars) resolved at configuration time, or "dev" when
+ * git is unavailable or the working tree is outside a repository. Uses a raw
+ * ProcessBuilder so the script doesn't depend on Gradle's `exec { }` — that
+ * helper is not in scope inside a Kotlin-DSL script body in Gradle 8+.
+ */
 val gitShortHash: String = runCatching {
-    val stdout = ByteArrayOutputStream()
-    exec {
-        commandLine("git", "rev-parse", "--short=7", "HEAD")
-        standardOutput = stdout
-        isIgnoreExitValue = true
-    }
-    stdout.toString(Charsets.UTF_8).trim().ifEmpty { "dev" }
+    val process = ProcessBuilder("git", "rev-parse", "--short=7", "HEAD")
+        .directory(rootDir)
+        .redirectErrorStream(true)
+        .start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+    process.waitFor()
+    output.ifEmpty { "dev" }
 }.getOrDefault("dev")
 
 android {
