@@ -3,7 +3,10 @@
  * autoKeyboard (ULT-8): when true the keyboard opens automatically on app drawer entry.
  * searchProviderPackage (ULT-16): package name of the app handling swipe-up search;
  *   null means delegate to the system default (Intent.ACTION_WEB_SEARCH).
- * doubleTapToLockEnabled (ULT-18): when true, a double-tap on the home screen locks the device.
+ * twoFingerTapToLockEnabled (ULT-18): when true, a single tap performed with two
+ *   fingers on the home screen locks the device. Two-finger tap was chosen over
+ *   single-finger double-tap because the latter conflicted with other handlers
+ *   on several devices.
  * Covers: ULT-6, ULT-8, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.domain.model
@@ -14,7 +17,7 @@ data class UserPreferences(
     val homeAlignment: HomeAlignment = HomeAlignment.LEFT,
     val autoKeyboard: Boolean = true,
     val searchProviderPackage: String? = null,
-    val doubleTapToLockEnabled: Boolean = false,
+    val twoFingerTapToLockEnabled: Boolean = false,
 )
 
 enum class FontSize(val scaleFactor: Float) {

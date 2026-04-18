@@ -39,7 +39,7 @@ class FakeUserPreferencesSource : UserPreferencesSource {
         _preferences.value = _preferences.value.copy(searchProviderPackage = packageName)
     }
 
-    override suspend fun updateDoubleTapToLock(enabled: Boolean) {
-        _preferences.value = _preferences.value.copy(doubleTapToLockEnabled = enabled)
+    override suspend fun updateTwoFingerTapToLock(enabled: Boolean) {
+        _preferences.value = _preferences.value.copy(twoFingerTapToLockEnabled = enabled)
     }
 }

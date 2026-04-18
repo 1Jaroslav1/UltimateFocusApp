@@ -5,7 +5,7 @@
  * - User preferences for layout alignment and theme (ULT-6)
  * - Dispatches gesture-triggered system actions:
  *   swipe-up web search (ULT-16), swipe-down notification shade (ULT-17),
- *   double-tap screen lock (ULT-18).
+ *   two-finger-tap screen lock (ULT-18).
  * Covers: ULT-6, ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.ui.home
@@ -64,12 +64,12 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Double-tap on the home screen locks the device when the feature is enabled.
-     * If device-admin permission is missing, also prompts for it so the next
-     * double-tap succeeds.
+     * Two-finger tap on the home screen locks the device when the feature is
+     * enabled. If device-admin permission is missing, also prompts for it so
+     * the next tap succeeds.
      */
-    fun onDoubleTap() {
-        if (!preferences.value.doubleTapToLockEnabled) return
+    fun onTwoFingerTap() {
+        if (!preferences.value.twoFingerTapToLockEnabled) return
         val result = systemActions.lockScreen()
         if (result is LockResult.MissingPermission) {
             systemActions.requestLockPermission()

@@ -81,45 +81,45 @@ class SettingsViewModelGestureTest {
         }
     }
 
-    // ── ULT-18: double-tap-to-lock ───────────────────────────────────────────
+    // ── ULT-18: two-finger-tap-to-lock ───────────────────────────────────────
 
     @Test
-    fun `setDoubleTapToLock enables the preference`() = runTest {
+    fun `setTwoFingerTapToLock enables the preference`() = runTest {
         viewModel.preferences.test {
             awaitItem()
-            viewModel.setDoubleTapToLock(true)
-            assertEquals(true, awaitItem().doubleTapToLockEnabled)
+            viewModel.setTwoFingerTapToLock(true)
+            assertEquals(true, awaitItem().twoFingerTapToLockEnabled)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `setDoubleTapToLock to true when admin not granted triggers permission prompt`() {
+    fun `setTwoFingerTapToLock to true when admin not granted triggers permission prompt`() {
         fakeSystemActions.setAdminGranted(false)
 
-        viewModel.setDoubleTapToLock(true)
+        viewModel.setTwoFingerTapToLock(true)
 
         assertEquals(1, fakeSystemActions.requestLockPermissionCalls)
     }
 
     @Test
-    fun `setDoubleTapToLock to true when admin already granted does not reprompt`() {
+    fun `setTwoFingerTapToLock to true when admin already granted does not reprompt`() {
         fakeSystemActions.setAdminGranted(true)
 
-        viewModel.setDoubleTapToLock(true)
+        viewModel.setTwoFingerTapToLock(true)
 
         assertEquals(0, fakeSystemActions.requestLockPermissionCalls)
     }
 
     @Test
-    fun `setDoubleTapToLock to false disables the preference and does not prompt`() = runTest {
-        fakePreferences.setPreferences(UserPreferences(doubleTapToLockEnabled = true))
+    fun `setTwoFingerTapToLock to false disables the preference and does not prompt`() = runTest {
+        fakePreferences.setPreferences(UserPreferences(twoFingerTapToLockEnabled = true))
         fakeSystemActions.setAdminGranted(false)
 
         viewModel.preferences.test {
             awaitItem()
-            viewModel.setDoubleTapToLock(false)
-            assertEquals(false, awaitItem().doubleTapToLockEnabled)
+            viewModel.setTwoFingerTapToLock(false)
+            assertEquals(false, awaitItem().twoFingerTapToLockEnabled)
             cancelAndIgnoreRemainingEvents()
         }
         assertEquals(0, fakeSystemActions.requestLockPermissionCalls)

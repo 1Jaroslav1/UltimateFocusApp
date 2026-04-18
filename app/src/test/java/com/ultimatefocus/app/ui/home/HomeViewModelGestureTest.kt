@@ -102,33 +102,33 @@ class HomeViewModelGestureTest {
     // ── ULT-18 ───────────────────────────────────────────────────────────────
 
     @Test
-    fun onDoubleTap_whenDisabled_doesNothing() = runTest {
-        fakePreferences.setPreferences(UserPreferences(doubleTapToLockEnabled = false))
+    fun onTwoFingerTap_whenDisabled_doesNothing() = runTest {
+        fakePreferences.setPreferences(UserPreferences(twoFingerTapToLockEnabled = false))
         fakeSystemActions.setAdminGranted(true)
 
-        viewModel.onDoubleTap()
+        viewModel.onTwoFingerTap()
 
         assertEquals(0, fakeSystemActions.lockScreenCalls)
         assertEquals(0, fakeSystemActions.requestLockPermissionCalls)
     }
 
     @Test
-    fun onDoubleTap_whenEnabledAndGranted_locksScreen() = runTest {
-        fakePreferences.setPreferences(UserPreferences(doubleTapToLockEnabled = true))
+    fun onTwoFingerTap_whenEnabledAndGranted_locksScreen() = runTest {
+        fakePreferences.setPreferences(UserPreferences(twoFingerTapToLockEnabled = true))
         fakeSystemActions.setAdminGranted(true)
 
-        viewModel.onDoubleTap()
+        viewModel.onTwoFingerTap()
 
         assertEquals(1, fakeSystemActions.lockScreenCalls)
         assertEquals(0, fakeSystemActions.requestLockPermissionCalls)
     }
 
     @Test
-    fun onDoubleTap_whenEnabledButNotGranted_requestsPermission() = runTest {
-        fakePreferences.setPreferences(UserPreferences(doubleTapToLockEnabled = true))
+    fun onTwoFingerTap_whenEnabledButNotGranted_requestsPermission() = runTest {
+        fakePreferences.setPreferences(UserPreferences(twoFingerTapToLockEnabled = true))
         fakeSystemActions.setAdminGranted(false)
 
-        viewModel.onDoubleTap()
+        viewModel.onTwoFingerTap()
 
         // Still attempts the lock so we can react to MissingPermission,
         // and triggers the admin prompt so the user can grant access next time.

@@ -1,7 +1,7 @@
 /**
  * Compose UI integration tests for the home-screen gesture modifiers.
- * Verifies swipe-up, swipe-down, double-tap dispatch and that below-threshold
- * or disabled-feature interactions are ignored.
+ * Verifies swipe-up, swipe-down and two-finger-tap dispatch and that
+ * below-threshold, horizontal or disabled-feature interactions are ignored.
  *
  * Covers: ULT-16, ULT-17, ULT-18
  */
@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
@@ -20,8 +19,8 @@ import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.ultimatefocus.app.ui.home.components.homeDoubleTap
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
+import com.ultimatefocus.app.ui.home.components.homeTwoFingerTap
 import com.ultimatefocus.app.ui.theme.UltimateFocusTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -34,9 +33,9 @@ class HomeScreenGestureTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private class Counts(var up: Int = 0, var down: Int = 0, var doubleTap: Int = 0)
+    private class Counts(var up: Int = 0, var down: Int = 0, var twoFinger: Int = 0)
 
-    private fun setContentWithGestures(counts: Counts, doubleTapEnabled: Boolean = false) {
+    private fun setContentWithGestures(counts: Counts, twoFingerEnabled: Boolean = false) {
         composeRule.setContent {
             UltimateFocusTheme {
                 Box(
@@ -46,9 +45,9 @@ class HomeScreenGestureTest {
                             onSwipeUp = { counts.up++ },
                             onSwipeDown = { counts.down++ },
                         )
-                        .homeDoubleTap(
-                            enabled = doubleTapEnabled,
-                            onDoubleTap = { counts.doubleTap++ },
+                        .homeTwoFingerTap(
+                            enabled = twoFingerEnabled,
+                            onTwoFingerTap = { counts.twoFinger++ },
                         )
                         .testTag("gesture_box"),
                 )
@@ -117,29 +116,58 @@ class HomeScreenGestureTest {
         }
     }
 
-    // ── ULT-18: double-tap ───────────────────────────────────────────────────
+    // ── ULT-18: two-finger tap ───────────────────────────────────────────────
 
     @Test
-    fun doubleTap_whenEnabled_dispatchesOnce() {
+    fun twoFingerTap_whenEnabled_dispatchesOnce() {
         val counts = Counts()
-        setContentWithGestures(counts, doubleTapEnabled = true)
+        setContentWithGestures(counts, twoFingerEnabled = true)
 
-        composeRule.onNodeWithTag("gesture_box").performTouchInput { doubleClick() }
+        composeRule.onNodeWithTag("gesture_box").performTouchInput {
+            val p1 = center + Offset(-50f, 0f)
+            val p2 = center + Offset(50f, 0f)
+            down(0, p1)
+            down(1, p2)
+            up(0)
+            up(1)
+        }
 
         composeRule.runOnIdle {
-            assertEquals(1, counts.doubleTap)
+            assertEquals(1, counts.twoFinger)
         }
     }
 
     @Test
-    fun doubleTap_whenDisabled_isIgnored() {
+    fun twoFingerTap_whenDisabled_isIgnored() {
         val counts = Counts()
-        setContentWithGestures(counts, doubleTapEnabled = false)
+        setContentWithGestures(counts, twoFingerEnabled = false)
 
-        composeRule.onNodeWithTag("gesture_box").performTouchInput { doubleClick() }
+        composeRule.onNodeWithTag("gesture_box").performTouchInput {
+            val p1 = center + Offset(-50f, 0f)
+            val p2 = center + Offset(50f, 0f)
+            down(0, p1)
+            down(1, p2)
+            up(0)
+            up(1)
+        }
 
         composeRule.runOnIdle {
-            assertEquals(0, counts.doubleTap)
+            assertEquals(0, counts.twoFinger)
+        }
+    }
+
+    @Test
+    fun singleFingerTap_whenTwoFingerEnabled_doesNotDispatch() {
+        val counts = Counts()
+        setContentWithGestures(counts, twoFingerEnabled = true)
+
+        composeRule.onNodeWithTag("gesture_box").performTouchInput {
+            down(center)
+            up()
+        }
+
+        composeRule.runOnIdle {
+            assertEquals(0, counts.twoFinger)
         }
     }
 }

@@ -18,5 +18,5 @@ interface UserPreferencesSource {
     suspend fun updateHomeAlignment(alignment: HomeAlignment)
     suspend fun updateAutoKeyboard(enabled: Boolean)
     suspend fun updateSearchProviderPackage(packageName: String?)
-    suspend fun updateDoubleTapToLock(enabled: Boolean)
+    suspend fun updateTwoFingerTapToLock(enabled: Boolean)
 }
