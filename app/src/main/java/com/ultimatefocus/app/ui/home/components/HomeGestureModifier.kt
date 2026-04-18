@@ -78,6 +78,12 @@ fun Modifier.homeTwoFingerDoubleTap(
     onSingleTapForDebug: (() -> Unit)? = null,
     onDebugEvent: ((String) -> Unit)? = null,
 ): Modifier = this.pointerInput(enabled) {
+    // Fires on every coroutine start so we can tell whether the modifier is
+    // armed or whether the stored preference is OFF. Keyed on `enabled`, so
+    // the coroutine restarts (and retoasts) whenever the pref flips.
+    onDebugEvent?.invoke(
+        if (enabled) "detector armed" else "detector OFF (toggle in Settings)",
+    )
     if (!enabled) return@pointerInput
     val slop = viewConfiguration.touchSlop
     val slopSquared = slop * slop
