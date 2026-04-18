@@ -36,8 +36,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 /** Minimum accumulated vertical drag (in dp) that counts as a swipe. */
 const val SWIPE_THRESHOLD_DP: Float = 60f
 
-/** Max gap between two-finger-tap #1 release and two-finger-tap #2 first down. */
-const val DOUBLE_TAP_GAP_MS: Long = 400L
+/**
+ * Max gap between two-finger-tap #1 release and two-finger-tap #2 first down.
+ * 700 ms is deliberately generous — humans naturally double-tap at ~300-600 ms
+ * and stock Android's ViewConfiguration.getDoubleTapTimeout() is 300 ms, but
+ * two-finger gestures take a touch longer to re-plant than one-finger ones.
+ */
+const val DOUBLE_TAP_GAP_MS: Long = 700L
 
 /**
  * Adds vertical-swipe detection to this node. The callbacks fire at most once
@@ -105,9 +110,16 @@ fun Modifier.homeTwoFingerDoubleTap(
             onSingleTapForDebug?.invoke()
             val (tapStart, tapEnd) = tap
             val prev = previousTapEndMs
-            if (prev != null && tapStart - prev <= DOUBLE_TAP_GAP_MS) {
-                previousTapEndMs = null
-                onTwoFingerDoubleTap()
+            if (prev != null) {
+                val gap = tapStart - prev
+                if (gap <= DOUBLE_TAP_GAP_MS) {
+                    onDebugEvent?.invoke("gap ${gap}ms → pair")
+                    previousTapEndMs = null
+                    onTwoFingerDoubleTap()
+                } else {
+                    onDebugEvent?.invoke("gap ${gap}ms → too slow, restarting")
+                    previousTapEndMs = tapEnd
+                }
             } else {
                 previousTapEndMs = tapEnd
             }
