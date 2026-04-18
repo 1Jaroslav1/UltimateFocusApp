@@ -27,8 +27,10 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 
 /** Minimum accumulated vertical drag (in dp) that counts as a swipe. */
@@ -74,6 +76,7 @@ fun Modifier.homeTwoFingerDoubleTap(
     enabled: Boolean,
     onTwoFingerDoubleTap: () -> Unit,
     onSingleTapForDebug: (() -> Unit)? = null,
+    onDebugEvent: ((String) -> Unit)? = null,
 ): Modifier = this.pointerInput(enabled) {
     if (!enabled) return@pointerInput
     val slop = viewConfiguration.touchSlop
@@ -87,7 +90,7 @@ fun Modifier.homeTwoFingerDoubleTap(
     awaitPointerEventScope {
         var previousTapEndMs: Long? = null
         while (true) {
-            val tap = recognizeTwoFingerTap(slopSquared, tapTimeoutMs)
+            val tap = recognizeTwoFingerTap(slopSquared, tapTimeoutMs, onDebugEvent)
             if (tap == null) {
                 // Non-qualifying gesture — abandon any pending pairing.
                 previousTapEndMs = null
@@ -110,28 +113,42 @@ fun Modifier.homeTwoFingerDoubleTap(
  * Waits for the next gesture and decides whether it qualifies as a brief
  * two-finger tap. Returns (startTime, endTime) on success, null otherwise.
  *
- * Kept as a top-level suspend extension so the detector can be called
- * repeatedly from a single pointerInput loop without the awaitEachGesture
- * convenience wrapper — which would force us back inside its own loop.
+ * Does NOT use awaitFirstDown() because that helper only exits when every
+ * change in the event is a down-transition — if finger 2 comes down in the
+ * same event as finger 1, awaitFirstDown skips the event entirely and the
+ * whole gesture can be missed. We roll a tiny manual loop that exits on the
+ * first event containing any down-transition, then seed `starts` from every
+ * pointer that's pressed in that event.
  */
 private suspend fun AwaitPointerEventScope.recognizeTwoFingerTap(
     slopSquared: Float,
     tapTimeoutMs: Long,
+    onDebugEvent: ((String) -> Unit)? = null,
 ): Pair<Long, Long>? {
-    val first = awaitFirstDown(
-        requireUnconsumed = false,
-        pass = PointerEventPass.Initial,
-    )
-    val startTime = first.uptimeMillis
-    val starts: MutableMap<PointerId, Offset> = mutableMapOf(first.id to first.position)
-    var sawTwoFingers = false
+    var event: PointerEvent
+    do {
+        event = awaitPointerEvent(PointerEventPass.Initial)
+    } while (event.changes.none { it.changedToDownIgnoreConsumed() })
+
+    val starts: MutableMap<PointerId, Offset> = mutableMapOf()
+    event.changes.forEach { ch ->
+        if (ch.pressed) starts[ch.id] = ch.position
+    }
+    if (starts.isEmpty()) {
+        onDebugEvent?.invoke("reject: first event had no pressed pointers")
+        return null
+    }
+    val startTime = event.changes.filter { it.pressed }.minOf { it.uptimeMillis }
+    var sawTwoFingers = starts.size >= 2
 
     while (true) {
-        val event = awaitPointerEvent(PointerEventPass.Initial)
+        event = awaitPointerEvent(PointerEventPass.Initial)
         val now = event.changes.maxOfOrNull { it.uptimeMillis } ?: startTime
 
-        // A long hold isn't a tap.
-        if (now - startTime > tapTimeoutMs) return null
+        if (now - startTime > tapTimeoutMs) {
+            onDebugEvent?.invoke("reject: > ${tapTimeoutMs}ms (hold, not tap)")
+            return null
+        }
 
         event.changes.forEach { ch ->
             if (ch.id !in starts && ch.pressed) {
@@ -146,10 +163,18 @@ private suspend fun AwaitPointerEventScope.recognizeTwoFingerTap(
             val dy = ch.position.y - start.y
             dx * dx + dy * dy > slopSquared
         }
-        if (drifted) return null
+        if (drifted) {
+            onDebugEvent?.invoke("reject: finger drifted past touchSlop")
+            return null
+        }
 
         if (event.changes.none { it.pressed }) {
-            return if (sawTwoFingers) startTime to now else null
+            return if (sawTwoFingers) {
+                startTime to now
+            } else {
+                onDebugEvent?.invoke("reject: released with only 1 finger seen")
+                null
+            }
         }
     }
     @Suppress("UNREACHABLE_CODE") return null

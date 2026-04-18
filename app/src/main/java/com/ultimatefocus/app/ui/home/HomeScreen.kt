@@ -83,6 +83,12 @@ fun HomeScreen(
                 onSingleTapForDebug = {
                     Toast.makeText(context, "2-finger tap recognized", Toast.LENGTH_SHORT).show()
                 },
+                // Diagnostic: surfaces every reject reason from the single-tap
+                // recogniser so we can see WHY a gesture was dismissed when
+                // no other toast fires. Removed once ULT-18 works end-to-end.
+                onDebugEvent = { reason ->
+                    Toast.makeText(context, reason, Toast.LENGTH_SHORT).show()
+                },
             )
             .testTag("home_screen"),
     ) {
