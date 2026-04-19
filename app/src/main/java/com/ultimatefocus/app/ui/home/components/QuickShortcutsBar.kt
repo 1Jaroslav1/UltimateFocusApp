@@ -1,9 +1,10 @@
 /**
- * Persistent bottom bar with two quick-access shortcut slots rendered as plain
- * text labels (no icons). Left slot defaults to "Phone", right to "Camera"
- * until the ViewModel resolves the current assignments. Tap launches the
- * assigned app; long-press delegates reassignment to the caller (opens the
- * app picker). Always pinned at the bottom of the home screen.
+ * Persistent bottom bar with two quick-access shortcut slots rendered as icons.
+ * Left slot: Phone icon (defaults to the system dialer, reassignable).
+ * Right slot: Camera icon (defaults to the system camera, reassignable).
+ * Tap launches the assigned app; long-press delegates reassignment to the
+ * caller (opens the app picker). Icons hug the horizontal edges so the bar
+ * reads as two anchor points rather than as a row of labels.
  * Covers: ULT-13, ULT-14
  */
 package com.ultimatefocus.app.ui.home.components
@@ -11,18 +12,24 @@ package com.ultimatefocus.app.ui.home.components
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.ShortcutSlot
@@ -38,19 +45,21 @@ fun QuickShortcutsBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(horizontal = 4.dp, vertical = 8.dp)
             .testTag("quick_shortcuts_bar"),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ShortcutLabel(
-            label = leftApp?.label ?: "Phone",
+        ShortcutIcon(
+            icon = Icons.Default.Phone,
+            contentDescription = leftApp?.label ?: "Phone",
             onClick = { onTap(ShortcutSlot.LEFT) },
             onLongClick = { onLongPress(ShortcutSlot.LEFT) },
             testTag = "shortcut_slot_left",
         )
-        ShortcutLabel(
-            label = rightApp?.label ?: "Camera",
+        ShortcutIcon(
+            icon = Icons.Default.PhotoCamera,
+            contentDescription = rightApp?.label ?: "Camera",
             onClick = { onTap(ShortcutSlot.RIGHT) },
             onLongClick = { onLongPress(ShortcutSlot.RIGHT) },
             testTag = "shortcut_slot_right",
@@ -60,25 +69,30 @@ fun QuickShortcutsBar(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ShortcutLabel(
-    label: String,
+private fun ShortcutIcon(
+    icon: ImageVector,
+    contentDescription: String,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     testTag: String,
 ) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onBackground,
-        fontWeight = FontWeight.Normal,
+    Box(
         modifier = Modifier
+            .size(56.dp)
             .combinedClickable(
-                indication = ripple(color = Color.Gray),
+                indication = ripple(bounded = false, radius = 28.dp, color = Color.Gray),
                 interactionSource = null,
                 onClick = onClick,
                 onLongClick = onLongClick,
             )
-            .padding(vertical = 8.dp, horizontal = 8.dp)
             .testTag(testTag),
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.size(32.dp),
+        )
+    }
 }

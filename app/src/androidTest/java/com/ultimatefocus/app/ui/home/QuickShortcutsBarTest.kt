@@ -1,8 +1,9 @@
 /**
  * Compose UI integration tests for QuickShortcutsBar.
- * Verifies default placeholder labels ("Phone", "Camera"), rendering of
- * resolved app labels, tap callbacks per slot, long-press callbacks per slot,
- * and that the bar stays displayed inside tight layouts (always-visible guarantee).
+ * Verifies default iconography (Phone/Camera content descriptions), per-slot
+ * content description when an app is assigned, tap callbacks per slot,
+ * long-press callbacks per slot, and that the bar stays displayed inside
+ * tight layouts (always-visible guarantee).
  * Covers: ULT-13, ULT-14
  */
 package com.ultimatefocus.app.ui.home
@@ -11,14 +12,13 @@ import android.content.ComponentName
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
@@ -50,7 +50,7 @@ class QuickShortcutsBarTest {
     // ── Happy paths ──────────────────────────────────────────────────────────
 
     @Test
-    fun bar_rendersDefaultLabels_whenAppsAreNull() {
+    fun bar_rendersPhoneAndCameraIcons_whenAppsAreNull() {
         composeRule.setContent {
             UltimateFocusTheme {
                 QuickShortcutsBar(
@@ -62,12 +62,12 @@ class QuickShortcutsBarTest {
             }
         }
         composeRule.onNodeWithTag("quick_shortcuts_bar").assertIsDisplayed()
-        composeRule.onNodeWithText("Phone").assertIsDisplayed()
-        composeRule.onNodeWithText("Camera").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Phone").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Camera").assertIsDisplayed()
     }
 
     @Test
-    fun bar_rendersAppLabels_whenAppsProvided() {
+    fun bar_usesAssignedAppLabel_asContentDescription() {
         composeRule.setContent {
             UltimateFocusTheme {
                 QuickShortcutsBar(
@@ -78,8 +78,8 @@ class QuickShortcutsBarTest {
                 )
             }
         }
-        composeRule.onNodeWithText("Maps").assertIsDisplayed()
-        composeRule.onNodeWithText("Notes").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Maps").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Notes").assertIsDisplayed()
     }
 
     @Test
@@ -187,8 +187,8 @@ class QuickShortcutsBarTest {
             }
         }
         composeRule.onNodeWithTag("quick_shortcuts_bar").assertIsDisplayed()
-        composeRule.onNodeWithText("Phone").assertIsDisplayed()
-        composeRule.onNodeWithText("Camera").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Phone").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Camera").assertIsDisplayed()
     }
 
     @Test
@@ -209,22 +209,19 @@ class QuickShortcutsBarTest {
     }
 
     @Test
-    fun bar_rendersVeryLongLabel_withoutCrash() {
-        val longName = "A".repeat(80)
+    fun assignedAppLabel_overridesDefaultContentDescription_onRightSlot() {
         composeRule.setContent {
             UltimateFocusTheme {
                 QuickShortcutsBar(
-                    leftApp = AppInfo(
-                        packageName = "com.test.long",
-                        label = longName,
-                        componentName = ComponentName("com.test.long", "Main"),
-                    ),
-                    rightApp = null,
+                    leftApp = null,
+                    rightApp = makeApp("Slack"),
                     onTap = {},
                     onLongPress = {},
                 )
             }
         }
-        composeRule.onNodeWithTag("quick_shortcuts_bar").assertIsDisplayed()
+        // Left stays "Phone" (no override), right switches to "Slack".
+        composeRule.onNodeWithContentDescription("Phone").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Slack").assertIsDisplayed()
     }
 }

@@ -86,7 +86,7 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(vertical = 16.dp),
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = when (preferences.homeAlignment) {
                 HomeAlignment.LEFT -> Alignment.Start
@@ -97,7 +97,9 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(48.dp))
 
             Box(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 ClockWidget(
@@ -117,7 +119,9 @@ fun HomeScreen(
                     selectedApp = app
                     showContextMenu = true
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 24.dp),
             )
 
             if (favorites.isEmpty()) {
@@ -127,7 +131,7 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
-                        .padding(bottom = 16.dp)
+                        .padding(start = 24.dp, end = 24.dp, bottom = 16.dp)
                         .testTag("swipe_hint"),
                 )
             }
