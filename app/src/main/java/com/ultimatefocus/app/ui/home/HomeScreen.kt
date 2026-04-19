@@ -3,13 +3,16 @@
  * Displays a text clock with battery arc (ULT-6) and a scrollable list of
  * favorite apps as plain text labels with no icons (ULT-6).
  * Swipe-left opens the full app drawer (ULT-7).
- * Swipe-down opens the notification shade.
- * Covers: ULT-6, ULT-7
+ * Swipe-up launches the configured web-search provider (ULT-16).
+ * Swipe-down opens the notification shade (ULT-17).
+ * A two-finger double-tap locks the device when the preference is enabled (ULT-18).
+ * A tiny build-hash label in the bottom-right corner identifies the
+ * currently installed build during on-device iteration.
+ * Covers: ULT-6, ULT-7, ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.ui.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,21 +33,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
-import android.net.Uri
 import android.provider.Settings
+import com.ultimatefocus.app.BuildConfig
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.HomeAlignment
 import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
 import com.ultimatefocus.app.ui.home.components.ClockWidget
 import com.ultimatefocus.app.ui.home.components.FavoritesList
-import java.lang.reflect.Method
+import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
+import com.ultimatefocus.app.ui.home.components.homeTwoFingerDoubleTap
 import androidx.core.net.toUri
 
 @Composable
@@ -64,19 +68,14 @@ fun HomeScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .pointerInput(Unit) {
-                detectVerticalDragGestures { _, dragAmount ->
-                    if (dragAmount > 40) {
-                        // Swipe down → expand notification shade
-                        try {
-                            val service = context.getSystemService("statusbar")
-                            val clazz = Class.forName("android.app.StatusBarManager")
-                            val method: Method = clazz.getMethod("expandNotificationsPanel")
-                            method.invoke(service)
-                        } catch (_: Exception) { /* not available on all devices */ }
-                    }
-                }
-            }
+            .homeSwipeGestures(
+                onSwipeUp = { viewModel.onSwipeUp() },
+                onSwipeDown = { viewModel.onSwipeDown() },
+            )
+            .homeTwoFingerDoubleTap(
+                enabled = preferences.twoFingerDoubleTapToLockEnabled,
+                onTwoFingerDoubleTap = { viewModel.onTwoFingerDoubleTap() },
+            )
             .testTag("home_screen"),
     ) {
         Column(
@@ -144,5 +143,19 @@ fun HomeScreen(
                 onDismiss = { showContextMenu = false },
             )
         }
+
+        // Build-version tag. Shows the git HEAD short hash (or "dev" when
+        // built outside git) so it's obvious which build is installed while
+        // iterating on device-specific bugs. Opaque on purpose (alpha 0.35)
+        // so it doesn't distract from the minimal layout.
+        Text(
+            text = BuildConfig.GIT_HASH,
+            fontSize = 9.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .testTag("build_hash"),
+        )
     }
 }

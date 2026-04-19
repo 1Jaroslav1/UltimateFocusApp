@@ -6,6 +6,23 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+/**
+ * Short git HEAD hash (7 chars) resolved at configuration time, or "dev" when
+ * git is unavailable or the working tree is outside a repository.
+ *
+ * Uses `providers.exec { }` rather than raw ProcessBuilder or Gradle's
+ * top-level `exec { }` because Gradle 9's configuration cache forbids
+ * un-tracked external processes at configuration time — providers.exec is the
+ * CC-aware entry point (the produced provider is registered as a cache input).
+ */
+val gitShortHash: String = runCatching {
+    providers.exec {
+        commandLine("git", "rev-parse", "--short=7", "HEAD")
+        workingDir = rootDir
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().ifEmpty { "dev" }
+}.getOrDefault("dev")
+
 android {
     namespace = "com.ultimatefocus.app"
     compileSdk = 36
@@ -18,6 +35,11 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "com.ultimatefocus.app.HiltTestRunner"
+
+        // Exposes the current git HEAD short hash (or "dev") to runtime code so
+        // the home screen can show which build is installed — useful while
+        // iterating on device-specific gesture bugs. See HomeScreen.kt (ULT-18).
+        buildConfigField("String", "GIT_HASH", "\"$gitShortHash\"")
     }
 
     buildTypes {
@@ -39,6 +61,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

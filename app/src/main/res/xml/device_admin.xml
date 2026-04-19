@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Device-admin policy metadata for LockDeviceAdminReceiver.
+  Requests the single `force-lock` capability so the launcher can lock
+  the device screen via DevicePolicyManager.lockNow() on double-tap.
+
+  Covers: ULT-18
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <force-lock />
+    </uses-policies>
+</device-admin>

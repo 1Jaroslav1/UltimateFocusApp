@@ -9,6 +9,7 @@ package com.ultimatefocus.app.ui.settings
 import app.cash.turbine.test
 import com.ultimatefocus.app.domain.model.UserPreferences
 import com.ultimatefocus.app.domain.repository.FakeUserPreferencesSource
+import com.ultimatefocus.app.domain.service.FakeSystemActions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -32,7 +33,7 @@ class SettingsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         fakePreferences = FakeUserPreferencesSource()
-        viewModel = SettingsViewModel(fakePreferences)
+        viewModel = SettingsViewModel(fakePreferences, FakeSystemActions())
     }
 
     @After

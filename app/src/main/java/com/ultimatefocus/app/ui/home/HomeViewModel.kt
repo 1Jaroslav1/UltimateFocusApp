@@ -3,7 +3,10 @@
  * - Reactive favorite apps list (ULT-6)
  * - Clock/battery state updated every second (ULT-6)
  * - User preferences for layout alignment and theme (ULT-6)
- * Covers: ULT-6
+ * - Dispatches gesture-triggered system actions:
+ *   swipe-up web search (ULT-16), swipe-down notification shade (ULT-17),
+ *   two-finger double-tap screen lock (ULT-18).
+ * Covers: ULT-6, ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.ui.home
 
@@ -14,6 +17,8 @@ import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.UserPreferences
+import com.ultimatefocus.app.domain.service.LockResult
+import com.ultimatefocus.app.domain.service.SystemActions
 import com.ultimatefocus.app.util.getBatteryLevel
 import com.ultimatefocus.app.util.isCharging
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,6 +37,7 @@ class HomeViewModel @Inject constructor(
     private val application: Application,
     private val appRepository: AppRepository,
     private val preferencesSource: UserPreferencesSource,
+    private val systemActions: SystemActions,
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -45,6 +51,28 @@ class HomeViewModel @Inject constructor(
 
     init {
         startClockLoop()
+    }
+
+    /** Swipe-up on the home screen launches the configured web-search provider. */
+    fun onSwipeUp() {
+        systemActions.openWebSearch(preferences.value.searchProviderPackage)
+    }
+
+    /** Swipe-down on the home screen expands the system notification shade. */
+    fun onSwipeDown() {
+        systemActions.openNotificationShade()
+    }
+
+    /**
+     * Two-finger double-tap on the home screen locks the device when the
+     * feature is enabled. If device-admin permission is missing, prompts for
+     * it so the next double-tap succeeds.
+     */
+    fun onTwoFingerDoubleTap() {
+        if (!preferences.value.twoFingerDoubleTapToLockEnabled) return
+        if (systemActions.lockScreen() is LockResult.MissingPermission) {
+            systemActions.requestLockPermission()
+        }
     }
 
     private fun startClockLoop() {

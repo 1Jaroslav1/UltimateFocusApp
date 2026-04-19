@@ -1,8 +1,9 @@
 /**
  * DataStore-backed implementation of UserPreferencesSource.
- * Persists user preferences (theme, font size, alignment, auto-keyboard) to disk
- * and exposes them as a Flow so the UI reacts to changes without polling.
- * Covers: ULT-6, ULT-8
+ * Persists user preferences (theme, font size, alignment, auto-keyboard, search
+ * provider, double-tap-to-lock) to disk and exposes them as a Flow so the UI
+ * reacts to changes without polling.
+ * Covers: ULT-6, ULT-8, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.data.preferences
 
@@ -34,6 +35,8 @@ class UserPreferencesDataStore @Inject constructor(
         val FONT_SIZE = stringPreferencesKey("font_size")
         val HOME_ALIGNMENT = stringPreferencesKey("home_alignment")
         val AUTO_KEYBOARD = booleanPreferencesKey("auto_keyboard")
+        val SEARCH_PROVIDER_PACKAGE = stringPreferencesKey("search_provider_package")
+        val TWO_FINGER_DOUBLE_TAP_TO_LOCK = booleanPreferencesKey("two_finger_double_tap_to_lock")
     }
 
     override val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -43,6 +46,8 @@ class UserPreferencesDataStore @Inject constructor(
             homeAlignment = prefs[Keys.HOME_ALIGNMENT]?.let { HomeAlignment.valueOf(it) }
                 ?: HomeAlignment.LEFT,
             autoKeyboard = prefs[Keys.AUTO_KEYBOARD] ?: true,
+            searchProviderPackage = prefs[Keys.SEARCH_PROVIDER_PACKAGE],
+            twoFingerDoubleTapToLockEnabled = prefs[Keys.TWO_FINGER_DOUBLE_TAP_TO_LOCK] ?: false,
         )
     }
 
@@ -60,5 +65,16 @@ class UserPreferencesDataStore @Inject constructor(
 
     override suspend fun updateAutoKeyboard(enabled: Boolean) {
         context.dataStore.edit { it[Keys.AUTO_KEYBOARD] = enabled }
+    }
+
+    override suspend fun updateSearchProviderPackage(packageName: String?) {
+        context.dataStore.edit { prefs ->
+            if (packageName == null) prefs.remove(Keys.SEARCH_PROVIDER_PACKAGE)
+            else prefs[Keys.SEARCH_PROVIDER_PACKAGE] = packageName
+        }
+    }
+
+    override suspend fun updateTwoFingerDoubleTapToLock(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.TWO_FINGER_DOUBLE_TAP_TO_LOCK] = enabled }
     }
 }

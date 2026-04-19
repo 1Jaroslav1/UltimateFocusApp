@@ -1,8 +1,8 @@
 /**
  * Integration tests for UserPreferencesDataStore using a real DataStore instance.
- * Verifies default values, persistence of updates, and correct reading
- * of the autoKeyboard flag.
- * Covers: ULT-8
+ * Verifies default values, persistence of updates, and round-trip of
+ * gesture-navigation preferences (search provider, two-finger-double-tap-to-lock).
+ * Covers: ULT-8, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.data.preferences
 
@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -90,5 +91,48 @@ class UserPreferencesDataStoreTest {
         val prefs = dataStore.preferences.first()
         assertFalse(prefs.isDarkTheme)
         assertFalse(prefs.autoKeyboard)
+    }
+
+    // ── ULT-16: search provider ──────────────────────────────────────────────
+
+    @Test
+    fun defaultPreferences_searchProviderPackageIsNull() = runTest {
+        assertNull(dataStore.preferences.first().searchProviderPackage)
+    }
+
+    @Test
+    fun updateSearchProviderPackage_persistsSelectedPackage() = runTest {
+        dataStore.updateSearchProviderPackage("com.duckduckgo.mobile.android")
+        assertEquals(
+            "com.duckduckgo.mobile.android",
+            dataStore.preferences.first().searchProviderPackage,
+        )
+    }
+
+    @Test
+    fun updateSearchProviderPackage_withNull_clearsStoredPackage() = runTest {
+        dataStore.updateSearchProviderPackage("com.android.chrome")
+        dataStore.updateSearchProviderPackage(null)
+        assertNull(dataStore.preferences.first().searchProviderPackage)
+    }
+
+    // ── ULT-18: two-finger-double-tap-to-lock ────────────────────────────────
+
+    @Test
+    fun defaultPreferences_twoFingerDoubleTapToLockIsFalse() = runTest {
+        assertFalse(dataStore.preferences.first().twoFingerDoubleTapToLockEnabled)
+    }
+
+    @Test
+    fun updateTwoFingerDoubleTapToLock_persistsNewValue() = runTest {
+        dataStore.updateTwoFingerDoubleTapToLock(true)
+        assertTrue(dataStore.preferences.first().twoFingerDoubleTapToLockEnabled)
+    }
+
+    @Test
+    fun updateTwoFingerDoubleTapToLock_toFalse_clearsPreviousValue() = runTest {
+        dataStore.updateTwoFingerDoubleTapToLock(true)
+        dataStore.updateTwoFingerDoubleTapToLock(false)
+        assertFalse(dataStore.preferences.first().twoFingerDoubleTapToLockEnabled)
     }
 }

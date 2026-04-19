@@ -1,7 +1,7 @@
 /**
  * In-memory test double for UserPreferencesSource. Returns configurable preference
  * flows without any Android context or DataStore dependency.
- * Covers: ULT-6, ULT-8
+ * Covers: ULT-6, ULT-8, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.domain.repository
 
@@ -33,5 +33,13 @@ class FakeUserPreferencesSource : UserPreferencesSource {
 
     override suspend fun updateAutoKeyboard(enabled: Boolean) {
         _preferences.value = _preferences.value.copy(autoKeyboard = enabled)
+    }
+
+    override suspend fun updateSearchProviderPackage(packageName: String?) {
+        _preferences.value = _preferences.value.copy(searchProviderPackage = packageName)
+    }
+
+    override suspend fun updateTwoFingerDoubleTapToLock(enabled: Boolean) {
+        _preferences.value = _preferences.value.copy(twoFingerDoubleTapToLockEnabled = enabled)
     }
 }
