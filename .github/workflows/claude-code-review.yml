@@ -26,5 +26,29 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           show_full_output: true
+          prompt: |
+            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+
+            After reviewing the code, post a summary comment on the PR using this exact format:
+
+            ## Code Review Report
+
+            | Category | Status | Details |
+            |----------|--------|---------|
+            | Security & Vulnerabilities | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
+            | Code Quality & Readability | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
+            | Performance | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
+            | Error Handling | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
+            | Architecture & Patterns | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
+            | Testing | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
+
+            ### Overall Risk: Low / Medium / High
+
+            ### Key Findings
+            - List the most important findings here
+
+            ### Recommendations
+            - List actionable improvements here
+
+            Use only ONE status per category (✅, ⚠️, or ❌). Be specific in the Details column.
