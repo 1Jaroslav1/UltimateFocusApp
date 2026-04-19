@@ -45,9 +45,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.runtime.LaunchedEffect
 import com.ultimatefocus.app.BuildConfig
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.HomeAlignment
+import com.ultimatefocus.app.ui.blocked.BlockedAppActivity
 import com.ultimatefocus.app.ui.components.AppContextMenuDialog
 import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
 import com.ultimatefocus.app.ui.home.components.ClockWidget
@@ -72,6 +74,21 @@ fun HomeScreen(
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
     var showBlockPicker by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.blockedAttempts.collect { blocked ->
+            val blockedUntilMs = System.currentTimeMillis() + blocked.remainingMs
+            context.startActivity(
+                BlockedAppActivity.intent(
+                    context = context,
+                    packageName = blocked.packageName,
+                    appLabel = blocked.appLabel,
+                    blockedUntilEpochMs = blockedUntilMs,
+                    durationLabel = blocked.durationLabel,
+                ),
+            )
+        }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()

@@ -36,6 +36,16 @@
             </intent-filter>
         </activity>
 
+        <!-- ULT-21: full-screen reminder shown when the user taps a blocked app.
+             singleTask + excludeFromRecents keep the reminder from stacking on
+             top of the task history; the user can only dismiss to home. -->
+        <activity
+            android:name=".ui.blocked.BlockedAppActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.UltimateFocus" />
+
         <receiver
             android:name=".receiver.PackageChangeReceiver"
             android:exported="false">

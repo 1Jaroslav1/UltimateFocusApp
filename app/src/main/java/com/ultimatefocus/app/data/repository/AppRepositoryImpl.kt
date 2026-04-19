@@ -4,12 +4,15 @@
  * - Combines installed apps with Room-persisted favorites and active
  *   manual blocks reactively (ULT-20 — blocked apps carry a non-null
  *   AppInfo.blockedUntilEpochMs so the UI can render the 🔒 + strikethrough)
+ * - launchApp enforces blocks: when the target app has an active block
+ *   it returns LaunchResult.Blocked instead of starting the intent. The
+ *   caller routes the user to BlockedAppActivity (ULT-21).
  * - Registers a LauncherApps callback so the list auto-refreshes on
  *   installs/removals
  * - Resolves bottom-bar quick-access shortcuts: materializes a user override
  *   to an AppInfo, or falls back to the system default dialer/camera via
  *   PackageManager.resolveActivity (ULT-13, ULT-14)
- * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20, ULT-21
  */
 package com.ultimatefocus.app.data.repository
 
@@ -25,9 +28,11 @@ import com.ultimatefocus.app.data.local.dao.FavoriteDao
 import com.ultimatefocus.app.data.local.entity.FavoriteEntity
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.BlockedApp
+import com.ultimatefocus.app.domain.model.LaunchResult
 import com.ultimatefocus.app.domain.model.ShortcutSlot
 import com.ultimatefocus.app.domain.model.ShortcutTarget
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
+import com.ultimatefocus.app.domain.service.Clock
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +49,7 @@ class AppRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val favoriteDao: FavoriteDao,
     private val blockedAppRepository: BlockedAppRepository,
+    private val clock: Clock,
 ) : AppRepository {
 
     private val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
@@ -148,13 +154,23 @@ class AppRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun launchApp(appInfo: AppInfo) {
+    override suspend fun launchApp(appInfo: AppInfo): LaunchResult {
+        val block = blockedAppRepository.getBlock(appInfo.packageName)
+        if (block != null) {
+            return LaunchResult.Blocked(
+                packageName = appInfo.packageName,
+                appLabel = appInfo.label,
+                remainingMs = (block.blockedUntilEpochMs - clock.now()).coerceAtLeast(0L),
+                durationLabel = block.durationLabel,
+            )
+        }
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             component = appInfo.componentName
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
         }
         context.startActivity(intent)
+        return LaunchResult.Launched
     }
 
     override fun refreshApps() = loadApps()

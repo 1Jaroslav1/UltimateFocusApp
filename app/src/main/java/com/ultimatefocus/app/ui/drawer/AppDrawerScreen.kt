@@ -43,6 +43,7 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.core.net.toUri
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.ui.blocked.BlockedAppActivity
 import com.ultimatefocus.app.ui.components.AppContextMenuDialog
 import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
 import com.ultimatefocus.app.ui.drawer.components.AppListItem
@@ -63,6 +64,22 @@ fun AppDrawerScreen(
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
     var showBlockPicker by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    val launchContext = androidx.compose.ui.platform.LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.blockedAttempts.collect { blocked ->
+            val blockedUntilMs = System.currentTimeMillis() + blocked.remainingMs
+            launchContext.startActivity(
+                BlockedAppActivity.intent(
+                    context = launchContext,
+                    packageName = blocked.packageName,
+                    appLabel = blocked.appLabel,
+                    blockedUntilEpochMs = blockedUntilMs,
+                    durationLabel = blocked.durationLabel,
+                ),
+            )
+        }
+    }
 
     LaunchedEffect(autoKeyboard, isActive) {
         if (autoKeyboard && isActive) {

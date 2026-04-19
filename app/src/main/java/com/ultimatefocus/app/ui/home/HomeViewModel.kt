@@ -10,7 +10,9 @@
  *   swipe-up web search (ULT-16), swipe-down notification shade (ULT-17),
  *   two-finger double-tap screen lock (ULT-18).
  * - Blocks an app for a chosen duration via BlockedAppRepository (ULT-20).
- * Covers: ULT-6, ULT-13, ULT-14, ULT-16, ULT-17, ULT-18, ULT-20
+ * - Routes blocked launch attempts onto `blockedAttempts` so the Screen can
+ *   open BlockedAppActivity — ViewModel stays Context-free (ULT-21).
+ * Covers: ULT-6, ULT-13, ULT-14, ULT-16, ULT-17, ULT-18, ULT-20, ULT-21
  */
 package com.ultimatefocus.app.ui.home
 
@@ -22,6 +24,7 @@ import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.BlockDuration
+import com.ultimatefocus.app.domain.model.LaunchResult
 import com.ultimatefocus.app.domain.model.ShortcutSlot
 import com.ultimatefocus.app.domain.model.UserPreferences
 import com.ultimatefocus.app.domain.service.LockResult
@@ -30,9 +33,12 @@ import com.ultimatefocus.app.util.getBatteryLevel
 import com.ultimatefocus.app.util.isCharging
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -51,6 +57,9 @@ class HomeViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    private val _blockedAttempts = MutableSharedFlow<LaunchResult.Blocked>(extraBufferCapacity = 4)
+    val blockedAttempts: SharedFlow<LaunchResult.Blocked> = _blockedAttempts.asSharedFlow()
 
     val favoriteApps: StateFlow<List<AppInfo>> = appRepository.getFavoriteApps()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -118,7 +127,10 @@ class HomeViewModel @Inject constructor(
     }
 
     fun launchApp(appInfo: AppInfo) {
-        viewModelScope.launch { appRepository.launchApp(appInfo) }
+        viewModelScope.launch {
+            val result = appRepository.launchApp(appInfo)
+            if (result is LaunchResult.Blocked) _blockedAttempts.emit(result)
+        }
     }
 
     fun toggleFavorite(appInfo: AppInfo) {
@@ -130,7 +142,10 @@ class HomeViewModel @Inject constructor(
             ShortcutSlot.LEFT -> leftShortcut.value
             ShortcutSlot.RIGHT -> rightShortcut.value
         } ?: return
-        viewModelScope.launch { appRepository.launchApp(target) }
+        viewModelScope.launch {
+            val result = appRepository.launchApp(target)
+            if (result is LaunchResult.Blocked) _blockedAttempts.emit(result)
+        }
     }
 
     fun blockApp(packageName: String, duration: BlockDuration) {
