@@ -54,6 +54,7 @@ fun BlockedAppScreen(
     BlockedAppContent(
         appLabel = uiState.appLabel,
         remainingLabel = BlockedTimeFormatter.formatRemaining(uiState.remainingMs),
+        unblockDateTimeLabel = uiState.unblockDateTimeLabel,
         onDismiss = onDismiss,
     )
 }
@@ -62,6 +63,7 @@ fun BlockedAppScreen(
 fun BlockedAppContent(
     appLabel: String,
     remainingLabel: String,
+    unblockDateTimeLabel: String,
     onDismiss: () -> Unit,
 ) {
     Box(
@@ -106,6 +108,18 @@ fun BlockedAppContent(
                     .fillMaxWidth()
                     .testTag("blocked_app_remaining"),
             )
+
+            if (unblockDateTimeLabel.isNotEmpty()) {
+                Text(
+                    text = "Blocked until $unblockDateTimeLabel",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("blocked_app_unblock_at"),
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 

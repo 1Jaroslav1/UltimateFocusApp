@@ -15,6 +15,7 @@ import com.ultimatefocus.app.ui.blocked.BlockedAppActivity.Companion.EXTRA_APP_L
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity.Companion.EXTRA_BLOCKED_UNTIL_MS
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity.Companion.EXTRA_DURATION_LABEL
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity.Companion.EXTRA_PACKAGE_NAME
+import com.ultimatefocus.app.util.BlockedTimeFormatter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +50,10 @@ class BlockedAppViewModel @Inject constructor(
 
     private fun initialState(): BlockedAppUiState = compute()
 
+    private val unblockDateTimeLabel: String =
+        if (blockedUntilEpochMs > 0L) BlockedTimeFormatter.formatUnblockDateTime(blockedUntilEpochMs)
+        else ""
+
     private fun compute(): BlockedAppUiState {
         val remaining = (blockedUntilEpochMs - clock.now()).coerceAtLeast(0L)
         return BlockedAppUiState(
@@ -56,6 +61,7 @@ class BlockedAppViewModel @Inject constructor(
             appLabel = appLabel,
             remainingMs = remaining,
             durationLabel = durationLabel,
+            unblockDateTimeLabel = unblockDateTimeLabel,
             shouldFinish = remaining <= 0L,
         )
     }

@@ -51,10 +51,12 @@ import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.HomeAlignment
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity
+import com.ultimatefocus.app.ui.components.AccessibilityPermissionPrompt
 import com.ultimatefocus.app.ui.components.AppContextMenuDialog
 import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
 import com.ultimatefocus.app.ui.components.NotificationPermissionPrompt
 import com.ultimatefocus.app.ui.home.components.ClockWidget
+import com.ultimatefocus.app.util.AccessibilityPermission
 import com.ultimatefocus.app.util.NotificationListenerPermission
 import com.ultimatefocus.app.ui.home.components.FavoritesList
 import com.ultimatefocus.app.ui.home.components.QuickShortcutsBar
@@ -77,7 +79,9 @@ fun HomeScreen(
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
     var showBlockPicker by remember { mutableStateOf(false) }
-    var pendingBlock by remember { mutableStateOf<Pair<AppInfo, BlockDuration>?>(null) }
+    var pendingBlock by remember {
+        mutableStateOf<Triple<AppInfo, BlockDuration, BlockPromptStep>?>(null)
+    }
 
     LaunchedEffect(Unit) {
         viewModel.blockedAttempts.collect { blocked ->
@@ -191,10 +195,11 @@ fun HomeScreen(
                 appLabel = selectedApp!!.label,
                 onConfirm = { duration ->
                     val app = selectedApp!!
-                    if (NotificationListenerPermission.isGranted(context)) {
+                    val step = nextBlockPromptStep(context, from = BlockPromptStep.Accessibility)
+                    if (step == BlockPromptStep.None) {
                         viewModel.blockApp(app.packageName, duration)
                     } else {
-                        pendingBlock = app to duration
+                        pendingBlock = Triple(app, duration, step)
                     }
                 },
                 onDismiss = {
@@ -206,20 +211,34 @@ fun HomeScreen(
 
         val pending = pendingBlock
         if (pending != null) {
-            NotificationPermissionPrompt(
-                appLabel = pending.first.label,
-                onGrantAccess = {
-                    NotificationListenerPermission.openSettings(context)
-                    viewModel.blockApp(pending.first.packageName, pending.second)
-                },
-                onContinueWithout = {
-                    viewModel.blockApp(pending.first.packageName, pending.second)
-                },
-                onDismiss = {
-                    pendingBlock = null
-                    selectedApp = null
-                },
-            )
+            when (pending.third) {
+                BlockPromptStep.Accessibility -> AccessibilityPermissionPrompt(
+                    appLabel = pending.first.label,
+                    onGrantAccess = { AccessibilityPermission.openSettings(context) },
+                    onContinueWithout = { /* fall through via onDismiss */ },
+                    onDismiss = {
+                        val next = nextBlockPromptStep(context, from = BlockPromptStep.Notification)
+                        if (next == BlockPromptStep.None) {
+                            viewModel.blockApp(pending.first.packageName, pending.second)
+                            pendingBlock = null
+                            selectedApp = null
+                        } else {
+                            pendingBlock = pending.copy(third = next)
+                        }
+                    },
+                )
+                BlockPromptStep.Notification -> NotificationPermissionPrompt(
+                    appLabel = pending.first.label,
+                    onGrantAccess = { NotificationListenerPermission.openSettings(context) },
+                    onContinueWithout = { /* fall through via onDismiss */ },
+                    onDismiss = {
+                        viewModel.blockApp(pending.first.packageName, pending.second)
+                        pendingBlock = null
+                        selectedApp = null
+                    },
+                )
+                BlockPromptStep.None -> Unit
+            }
         }
 
         // Build-version tag. Shows the git HEAD short hash (or "dev" when
@@ -236,4 +255,25 @@ fun HomeScreen(
                 .testTag("build_hash"),
         )
     }
+}
+
+/**
+ * Sequence of permission prompts to show when the user commits a block:
+ * Accessibility first (primary enforcement mechanism), then Notification
+ * Listener (notification suppression). Either may be skipped when already
+ * granted; the block itself always commits after the flow completes.
+ */
+enum class BlockPromptStep { Accessibility, Notification, None }
+
+internal fun nextBlockPromptStep(
+    context: android.content.Context,
+    from: BlockPromptStep,
+): BlockPromptStep {
+    if (from <= BlockPromptStep.Accessibility &&
+        !AccessibilityPermission.isGranted(context)
+    ) return BlockPromptStep.Accessibility
+    if (from <= BlockPromptStep.Notification &&
+        !NotificationListenerPermission.isGranted(context)
+    ) return BlockPromptStep.Notification
+    return BlockPromptStep.None
 }

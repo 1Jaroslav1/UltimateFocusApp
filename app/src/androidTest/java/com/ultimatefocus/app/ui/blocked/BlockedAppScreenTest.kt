@@ -34,6 +34,7 @@ class BlockedAppScreenTest {
                 BlockedAppContent(
                     appLabel = "Instagram",
                     remainingLabel = "2h 17m",
+                    unblockDateTimeLabel = "Apr 19, 20:45",
                     onDismiss = {},
                 )
             }
@@ -55,6 +56,7 @@ class BlockedAppScreenTest {
                 BlockedAppContent(
                     appLabel = "Instagram",
                     remainingLabel = "1h 0m",
+                    unblockDateTimeLabel = "Apr 19, 20:45",
                     onDismiss = { dismissed++ },
                 )
             }
@@ -70,6 +72,7 @@ class BlockedAppScreenTest {
                 BlockedAppContent(
                     appLabel = "Instagram",
                     remainingLabel = "1h 0m",
+                    unblockDateTimeLabel = "Apr 19, 20:45",
                     onDismiss = {},
                 )
             }
@@ -92,12 +95,45 @@ class BlockedAppScreenTest {
     }
 
     @Test
+    fun unblockDateTime_isDisplayedWhenProvided() {
+        composeRule.setContent {
+            UltimateFocusTheme {
+                BlockedAppContent(
+                    appLabel = "Instagram",
+                    remainingLabel = "1h 0m",
+                    unblockDateTimeLabel = "Apr 19, 20:45",
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("blocked_app_unblock_at").assertIsDisplayed()
+        composeRule.onNodeWithText("Blocked until Apr 19, 20:45").assertIsDisplayed()
+    }
+
+    @Test
+    fun unblockDateTime_isOmittedWhenEmpty() {
+        composeRule.setContent {
+            UltimateFocusTheme {
+                BlockedAppContent(
+                    appLabel = "Instagram",
+                    remainingLabel = "1h 0m",
+                    unblockDateTimeLabel = "",
+                    onDismiss = {},
+                )
+            }
+        }
+        // No crash and the node is not rendered.
+        composeRule.onNodeWithTag("blocked_return_home").assertIsDisplayed()
+    }
+
+    @Test
     fun remainingZero_rendersLessThan1m() {
         composeRule.setContent {
             UltimateFocusTheme {
                 BlockedAppContent(
                     appLabel = "Calendar",
                     remainingLabel = "< 1m",
+                    unblockDateTimeLabel = "Apr 19, 20:45",
                     onDismiss = {},
                 )
             }

@@ -45,11 +45,15 @@ import androidx.core.net.toUri
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity
+import com.ultimatefocus.app.ui.components.AccessibilityPermissionPrompt
 import com.ultimatefocus.app.ui.components.AppContextMenuDialog
 import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
 import com.ultimatefocus.app.ui.components.NotificationPermissionPrompt
 import com.ultimatefocus.app.ui.drawer.components.AppListItem
 import com.ultimatefocus.app.ui.drawer.components.SearchBar
+import com.ultimatefocus.app.ui.home.BlockPromptStep
+import com.ultimatefocus.app.ui.home.nextBlockPromptStep
+import com.ultimatefocus.app.util.AccessibilityPermission
 import com.ultimatefocus.app.util.NotificationListenerPermission
 
 @Composable
@@ -66,7 +70,9 @@ fun AppDrawerScreen(
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
     var showBlockPicker by remember { mutableStateOf(false) }
-    var pendingBlock by remember { mutableStateOf<Pair<AppInfo, BlockDuration>?>(null) }
+    var pendingBlock by remember {
+        mutableStateOf<Triple<AppInfo, BlockDuration, BlockPromptStep>?>(null)
+    }
     val focusRequester = remember { FocusRequester() }
     val launchContext = androidx.compose.ui.platform.LocalContext.current
 
@@ -190,10 +196,11 @@ fun AppDrawerScreen(
             appLabel = selectedApp!!.label,
             onConfirm = { duration ->
                 val app = selectedApp!!
-                if (NotificationListenerPermission.isGranted(launchContext)) {
+                val step = nextBlockPromptStep(launchContext, from = BlockPromptStep.Accessibility)
+                if (step == BlockPromptStep.None) {
                     viewModel.blockApp(app.packageName, duration)
                 } else {
-                    pendingBlock = app to duration
+                    pendingBlock = Triple(app, duration, step)
                 }
             },
             onDismiss = {
@@ -205,19 +212,33 @@ fun AppDrawerScreen(
 
     val pending = pendingBlock
     if (pending != null) {
-        NotificationPermissionPrompt(
-            appLabel = pending.first.label,
-            onGrantAccess = {
-                NotificationListenerPermission.openSettings(launchContext)
-                viewModel.blockApp(pending.first.packageName, pending.second)
-            },
-            onContinueWithout = {
-                viewModel.blockApp(pending.first.packageName, pending.second)
-            },
-            onDismiss = {
-                pendingBlock = null
-                selectedApp = null
-            },
-        )
+        when (pending.third) {
+            BlockPromptStep.Accessibility -> AccessibilityPermissionPrompt(
+                appLabel = pending.first.label,
+                onGrantAccess = { AccessibilityPermission.openSettings(launchContext) },
+                onContinueWithout = { /* fall through via onDismiss */ },
+                onDismiss = {
+                    val next = nextBlockPromptStep(launchContext, from = BlockPromptStep.Notification)
+                    if (next == BlockPromptStep.None) {
+                        viewModel.blockApp(pending.first.packageName, pending.second)
+                        pendingBlock = null
+                        selectedApp = null
+                    } else {
+                        pendingBlock = pending.copy(third = next)
+                    }
+                },
+            )
+            BlockPromptStep.Notification -> NotificationPermissionPrompt(
+                appLabel = pending.first.label,
+                onGrantAccess = { NotificationListenerPermission.openSettings(launchContext) },
+                onContinueWithout = { /* fall through via onDismiss */ },
+                onDismiss = {
+                    viewModel.blockApp(pending.first.packageName, pending.second)
+                    pendingBlock = null
+                    selectedApp = null
+                },
+            )
+            BlockPromptStep.None -> Unit
+        }
     }
 }

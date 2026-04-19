@@ -8,6 +8,8 @@ package com.ultimatefocus.app.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 
 class BlockedTimeFormatterTest {
@@ -61,5 +63,33 @@ class BlockedTimeFormatterTest {
     @Test
     fun `one day formats as 1d 0h`() {
         assertEquals("1d 0h", BlockedTimeFormatter.formatRemaining(TimeUnit.DAYS.toMillis(1)))
+    }
+
+    // ── formatUnblockDateTime ────────────────────────────────────────────────
+
+    @Test
+    fun `formatUnblockDateTime uses MMM d HH_mm pattern`() {
+        val utc = ZoneId.of("UTC")
+        val epoch = ZonedDateTime.of(2026, 4, 19, 18, 45, 0, 0, utc)
+            .toInstant()
+            .toEpochMilli()
+        assertEquals(
+            "Apr 19, 18:45",
+            BlockedTimeFormatter.formatUnblockDateTime(epoch, zone = utc),
+        )
+    }
+
+    @Test
+    fun `formatUnblockDateTime respects the supplied zone`() {
+        val utc = ZoneId.of("UTC")
+        val la = ZoneId.of("America/Los_Angeles")
+        val epoch = ZonedDateTime.of(2026, 4, 19, 18, 45, 0, 0, utc)
+            .toInstant()
+            .toEpochMilli()
+        // Apr 19 18:45 UTC == Apr 19 11:45 America/Los_Angeles (PDT)
+        assertEquals(
+            "Apr 19, 11:45",
+            BlockedTimeFormatter.formatUnblockDateTime(epoch, zone = la),
+        )
     }
 }
