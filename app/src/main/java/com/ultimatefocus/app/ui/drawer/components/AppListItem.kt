@@ -1,8 +1,11 @@
 /**
  * Single row in the app drawer list. Renders the app name as a plain text label
  * with no icon, badge, or thumbnail. Favorites are shown in bold.
+ * Blocked apps (AppInfo.blockedUntilEpochMs != null) get a 🔒 prefix,
+ * strikethrough, and a faded color so the user sees at a glance the app is
+ * currently unavailable (ULT-20 visual indicator AC).
  * Supports tap (launch) and long-press (context menu).
- * Covers: ULT-7
+ * Covers: ULT-7, ULT-20
  */
 package com.ultimatefocus.app.ui.drawer.components
 
@@ -20,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.ultimatefocus.app.domain.model.AppInfo
 
@@ -31,6 +35,7 @@ fun AppListItem(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isBlocked = appInfo.blockedUntilEpochMs != null
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -45,10 +50,15 @@ fun AppListItem(
             .testTag("drawer_item_${appInfo.packageName}"),
     ) {
         Text(
-            text = appInfo.label,
+            text = if (isBlocked) "\uD83D\uDD12 ${appInfo.label}" else appInfo.label,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = if (isBlocked) {
+                MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.onBackground
+            },
             fontWeight = if (appInfo.isFavorite) FontWeight.Bold else FontWeight.Normal,
+            textDecoration = if (isBlocked) TextDecoration.LineThrough else TextDecoration.None,
         )
     }
 }

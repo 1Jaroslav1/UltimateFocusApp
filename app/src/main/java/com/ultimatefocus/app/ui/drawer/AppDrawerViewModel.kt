@@ -1,9 +1,10 @@
 /**
  * ViewModel for the full app drawer. Holds the search query and produces
  * a filtered, alphabetically sorted list of installed apps for display.
- * Also exposes the autoKeyboard preference so the screen auto-focuses the
+ * Exposes the autoKeyboard preference so the screen auto-focuses the
  * search field when the setting is enabled (ULT-8).
- * Covers: ULT-7, ULT-8
+ * Exposes blockApp() to commit a manual block on a chosen app + duration (ULT-20).
+ * Covers: ULT-7, ULT-8, ULT-20
  */
 package com.ultimatefocus.app.ui.drawer
 
@@ -11,6 +12,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.domain.model.BlockDuration
+import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,6 +31,7 @@ import javax.inject.Inject
 class AppDrawerViewModel @Inject constructor(
     private val appRepository: AppRepository,
     private val preferencesSource: UserPreferencesSource,
+    private val blockedAppRepository: BlockedAppRepository,
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -53,5 +57,9 @@ class AppDrawerViewModel @Inject constructor(
 
     fun toggleFavorite(appInfo: AppInfo) {
         viewModelScope.launch { appRepository.toggleFavorite(appInfo) }
+    }
+
+    fun blockApp(packageName: String, duration: BlockDuration) {
+        viewModelScope.launch { blockedAppRepository.block(packageName, duration) }
     }
 }

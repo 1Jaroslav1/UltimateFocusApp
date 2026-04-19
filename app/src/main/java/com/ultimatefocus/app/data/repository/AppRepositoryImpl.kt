@@ -1,12 +1,15 @@
 /**
  * Offline-first repository implementation:
  * - Queries the Android LauncherApps system service for installed apps
- * - Combines installed apps with Room-persisted favorites reactively
- * - Registers a LauncherApps callback so the list auto-refreshes on installs/removals
- * - Resolves bottom-bar quick-access shortcuts: materializes a user override to
- *   an AppInfo, or falls back to the system default dialer/camera via
+ * - Combines installed apps with Room-persisted favorites and active
+ *   manual blocks reactively (ULT-20 — blocked apps carry a non-null
+ *   AppInfo.blockedUntilEpochMs so the UI can render the 🔒 + strikethrough)
+ * - Registers a LauncherApps callback so the list auto-refreshes on
+ *   installs/removals
+ * - Resolves bottom-bar quick-access shortcuts: materializes a user override
+ *   to an AppInfo, or falls back to the system default dialer/camera via
  *   PackageManager.resolveActivity (ULT-13, ULT-14)
- * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20
  */
 package com.ultimatefocus.app.data.repository
 
@@ -21,8 +24,10 @@ import android.provider.MediaStore
 import com.ultimatefocus.app.data.local.dao.FavoriteDao
 import com.ultimatefocus.app.data.local.entity.FavoriteEntity
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.domain.model.BlockedApp
 import com.ultimatefocus.app.domain.model.ShortcutSlot
 import com.ultimatefocus.app.domain.model.ShortcutTarget
+import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +43,7 @@ import javax.inject.Singleton
 class AppRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val favoriteDao: FavoriteDao,
+    private val blockedAppRepository: BlockedAppRepository,
 ) : AppRepository {
 
     private val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
@@ -88,8 +94,18 @@ class AppRepositoryImpl @Inject constructor(
     }
 
     override fun getInstalledApps(): Flow<List<AppInfo>> =
-        combine(_installedApps, favoriteDao.getFavoritePackageNames()) { apps, favorites ->
-            apps.map { app -> app.copy(isFavorite = app.packageName in favorites) }
+        combine(
+            _installedApps,
+            favoriteDao.getFavoritePackageNames(),
+            blockedAppRepository.observeActiveBlocks(),
+        ) { apps, favorites, blocks ->
+            val blockMap = blocks.toBlockMap()
+            apps.map { app ->
+                app.copy(
+                    isFavorite = app.packageName in favorites,
+                    blockedUntilEpochMs = blockMap[app.packageName],
+                )
+            }
         }
 
     override fun searchApps(query: String): Flow<List<AppInfo>> =
@@ -99,13 +115,19 @@ class AppRepositoryImpl @Inject constructor(
         }
 
     override fun getFavoriteApps(): Flow<List<AppInfo>> =
-        combine(_installedApps, favoriteDao.getAllFavorites()) { apps, favorites ->
+        combine(
+            _installedApps,
+            favoriteDao.getAllFavorites(),
+            blockedAppRepository.observeActiveBlocks(),
+        ) { apps, favorites, blocks ->
             val favoriteMap = favorites.associateBy { it.packageName }
+            val blockMap = blocks.toBlockMap()
             apps.filter { it.packageName in favoriteMap }
                 .map { app ->
                     app.copy(
                         isFavorite = true,
                         favoriteOrder = favoriteMap[app.packageName]?.displayOrder ?: 0,
+                        blockedUntilEpochMs = blockMap[app.packageName],
                     )
                 }
                 .sortedBy { it.favoriteOrder }
@@ -172,4 +194,7 @@ class AppRepositoryImpl @Inject constructor(
             componentName = componentName,
         )
     }
+
+    private fun List<BlockedApp>.toBlockMap(): Map<String, Long> =
+        associate { it.packageName to it.blockedUntilEpochMs }
 }

@@ -1,9 +1,17 @@
 /**
- * Minimalist context menu dialog shown on long-press of an app.
- * Displays the app name at the top, followed by action buttons:
- * "Add to Favorites" / "Remove from Favorites" and "App Info".
- * Uses a custom Dialog for full styling control — no default AlertDialog chrome.
- * Covers: ULT-6
+ * Minimalist long-press context menu for an app. Replaces the earlier
+ * FavoriteContextMenuDialog with a block-aware variant used on both the
+ * home favorites list and the full drawer.
+ * - Unblocked: "Add/Remove Favorite", "Block app…", "App Info"
+ * - Blocked:   "Add/Remove Favorite", read-only "Blocked — {remaining}",
+ *              "App Info". Deliberately NO "Unblock" row — the repository
+ *              interface has no unblock method, satisfying the ULT-19
+ *              "no self-unblock escape hatch" requirement at the architecture
+ *              layer.
+ * Reuses existing test tags (`context_menu_toggle_favorite`, `context_menu_app_info`)
+ * so existing instrumentation tests keep passing. Adds new tags
+ * `context_menu_block_app` and `context_menu_block_status`.
+ * Covers: ULT-6, ULT-20
  */
 package com.ultimatefocus.app.ui.components
 
@@ -16,6 +24,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
@@ -26,24 +35,32 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.util.BlockedTimeFormatter
 
 @Composable
-fun FavoriteContextMenuDialog(
+fun AppContextMenuDialog(
     app: AppInfo,
+    nowEpochMs: Long,
     onToggleFavorite: (AppInfo) -> Unit,
+    onBlockApp: (AppInfo) -> Unit,
     onAppInfo: (AppInfo) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val favoriteInteraction = remember { MutableInteractionSource() }
+    val blockInteraction = remember { MutableInteractionSource() }
     val infoInteraction = remember { MutableInteractionSource() }
     val favoritePressed = favoriteInteraction.collectIsPressedAsState()
+    val blockPressed = blockInteraction.collectIsPressedAsState()
     val infoPressed = infoInteraction.collectIsPressedAsState()
+
+    val blockedUntil = app.blockedUntilEpochMs
+    val isBlocked = blockedUntil != null && blockedUntil > nowEpochMs
+    val remainingMs = if (isBlocked) blockedUntil!! - nowEpochMs else 0L
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -70,10 +87,8 @@ fun FavoriteContextMenuDialog(
                     )
                 }
 
-
                 HorizontalDivider(color = Color.White, thickness = 1.dp)
 
-                // Body
                 Column(
                     verticalArrangement = Arrangement.spacedBy(0.dp),
                     modifier = Modifier
@@ -100,6 +115,47 @@ fun FavoriteContextMenuDialog(
                             color = Color.White,
                             modifier = Modifier.fillMaxWidth(),
                         )
+                    }
+
+                    if (isBlocked) {
+                        // Read-only status row. No onClick — the repository has
+                        // no unblock method, so the UI cannot offer an override.
+                        Box(
+                            contentAlignment = Alignment.CenterStart,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .padding(horizontal = 12.dp)
+                                .testTag("context_menu_block_status"),
+                        ) {
+                            Text(
+                                text = "Blocked — ${BlockedTimeFormatter.formatRemaining(remainingMs)} remaining",
+                                fontSize = 14.sp,
+                                color = Color.White,
+                            )
+                        }
+                    } else {
+                        TextButton(
+                            onClick = {
+                                onBlockApp(app)
+                                onDismiss()
+                            },
+                            interactionSource = blockInteraction,
+                            colors = ButtonDefaults.textButtonColors(
+                                containerColor = if (blockPressed.value) Color.Gray else Color.Transparent,
+                            ),
+                            shape = RoundedCornerShape(0.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("context_menu_block_app"),
+                        ) {
+                            Text(
+                                text = "Block app\u2026",
+                                fontSize = 14.sp,
+                                color = Color.White,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
 
                     TextButton(

@@ -8,9 +8,11 @@
  * A two-finger double-tap locks the device when the preference is enabled (ULT-18).
  * Pins a two-slot quick-access shortcut bar at the bottom that remains
  * visible even when favorites overflow (ULT-13).
+ * Long-pressing a favorite opens a context menu that routes a "Block app…"
+ * tap to the duration picker + confirmation flow (ULT-20).
  * A tiny build-hash label in the bottom-right corner identifies the
  * currently installed build during on-device iteration.
- * Covers: ULT-6, ULT-7, ULT-13, ULT-16, ULT-17, ULT-18
+ * Covers: ULT-6, ULT-7, ULT-13, ULT-16, ULT-17, ULT-18, ULT-20
  */
 package com.ultimatefocus.app.ui.home
 
@@ -46,7 +48,8 @@ import android.provider.Settings
 import com.ultimatefocus.app.BuildConfig
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.HomeAlignment
-import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
+import com.ultimatefocus.app.ui.components.AppContextMenuDialog
+import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
 import com.ultimatefocus.app.ui.home.components.ClockWidget
 import com.ultimatefocus.app.ui.home.components.FavoritesList
 import com.ultimatefocus.app.ui.home.components.QuickShortcutsBar
@@ -68,6 +71,7 @@ fun HomeScreen(
 
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
+    var showBlockPicker by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -141,9 +145,15 @@ fun HomeScreen(
         }
 
         if (showContextMenu && selectedApp != null) {
-            FavoriteContextMenuDialog(
+            AppContextMenuDialog(
                 app = selectedApp!!,
+                nowEpochMs = uiState.currentTime
+                    .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(),
                 onToggleFavorite = { viewModel.toggleFavorite(it) },
+                onBlockApp = {
+                    showContextMenu = false
+                    showBlockPicker = true
+                },
                 onAppInfo = { app ->
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                         data = "package:${app.packageName}".toUri()
@@ -152,6 +162,19 @@ fun HomeScreen(
                     context.startActivity(intent)
                 },
                 onDismiss = { showContextMenu = false },
+            )
+        }
+
+        if (showBlockPicker && selectedApp != null) {
+            BlockDurationPickerDialog(
+                appLabel = selectedApp!!.label,
+                onConfirm = { duration ->
+                    viewModel.blockApp(selectedApp!!.packageName, duration)
+                },
+                onDismiss = {
+                    showBlockPicker = false
+                    selectedApp = null
+                },
             )
         }
 

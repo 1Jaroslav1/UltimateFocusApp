@@ -15,6 +15,7 @@ import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.ShortcutSlot
 import com.ultimatefocus.app.domain.model.ShortcutTarget
 import com.ultimatefocus.app.domain.model.UserPreferences
+import com.ultimatefocus.app.domain.repository.FakeBlockedAppRepository
 import com.ultimatefocus.app.domain.repository.FakeUserPreferencesSource
 import com.ultimatefocus.app.domain.service.FakeSystemActions
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +58,7 @@ class HomeViewModelTest {
             appRepository = fakeRepository,
             preferencesSource = fakePreferences,
             systemActions = FakeSystemActions(),
+            blockedAppRepository = FakeBlockedAppRepository(),
         )
     }
 

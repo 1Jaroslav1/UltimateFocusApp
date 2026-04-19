@@ -4,7 +4,9 @@
  * screen; dismissible by swiping right or pressing back (ULT-7).
  * When the auto-keyboard setting is enabled the search field gains focus
  * automatically on entry, prompting intentional typing (ULT-8).
- * Covers: ULT-7, ULT-8
+ * Long-pressing a row routes through the block-aware context menu +
+ * duration picker (ULT-20).
+ * Covers: ULT-7, ULT-8, ULT-20
  */
 package com.ultimatefocus.app.ui.drawer
 
@@ -41,7 +43,8 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.core.net.toUri
 import com.ultimatefocus.app.domain.model.AppInfo
-import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
+import com.ultimatefocus.app.ui.components.AppContextMenuDialog
+import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
 import com.ultimatefocus.app.ui.drawer.components.AppListItem
 import com.ultimatefocus.app.ui.drawer.components.SearchBar
 
@@ -58,6 +61,7 @@ fun AppDrawerScreen(
 
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
+    var showBlockPicker by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(autoKeyboard, isActive) {
@@ -141,9 +145,14 @@ fun AppDrawerScreen(
 
     if (showContextMenu && selectedApp != null) {
         val context = androidx.compose.ui.platform.LocalContext.current
-        FavoriteContextMenuDialog(
+        AppContextMenuDialog(
             app = selectedApp!!,
+            nowEpochMs = System.currentTimeMillis(),
             onToggleFavorite = { viewModel.toggleFavorite(it) },
+            onBlockApp = {
+                showContextMenu = false
+                showBlockPicker = true
+            },
             onAppInfo = { app ->
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = "package:${app.packageName}".toUri()
@@ -152,6 +161,19 @@ fun AppDrawerScreen(
                 context.startActivity(intent)
             },
             onDismiss = { showContextMenu = false },
+        )
+    }
+
+    if (showBlockPicker && selectedApp != null) {
+        BlockDurationPickerDialog(
+            appLabel = selectedApp!!.label,
+            onConfirm = { duration ->
+                viewModel.blockApp(selectedApp!!.packageName, duration)
+            },
+            onDismiss = {
+                showBlockPicker = false
+                selectedApp = null
+            },
         )
     }
 }

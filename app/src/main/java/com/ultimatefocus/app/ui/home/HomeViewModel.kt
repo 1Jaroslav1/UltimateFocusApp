@@ -9,16 +9,19 @@
  * - Dispatches gesture-triggered system actions:
  *   swipe-up web search (ULT-16), swipe-down notification shade (ULT-17),
  *   two-finger double-tap screen lock (ULT-18).
- * Covers: ULT-6, ULT-13, ULT-14, ULT-16, ULT-17, ULT-18
+ * - Blocks an app for a chosen duration via BlockedAppRepository (ULT-20).
+ * Covers: ULT-6, ULT-13, ULT-14, ULT-16, ULT-17, ULT-18, ULT-20
  */
 package com.ultimatefocus.app.ui.home
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.ShortcutSlot
 import com.ultimatefocus.app.domain.model.UserPreferences
 import com.ultimatefocus.app.domain.service.LockResult
@@ -43,6 +46,7 @@ class HomeViewModel @Inject constructor(
     private val appRepository: AppRepository,
     private val preferencesSource: UserPreferencesSource,
     private val systemActions: SystemActions,
+    private val blockedAppRepository: BlockedAppRepository,
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -127,5 +131,9 @@ class HomeViewModel @Inject constructor(
             ShortcutSlot.RIGHT -> rightShortcut.value
         } ?: return
         viewModelScope.launch { appRepository.launchApp(target) }
+    }
+
+    fun blockApp(packageName: String, duration: BlockDuration) {
+        viewModelScope.launch { blockedAppRepository.block(packageName, duration) }
     }
 }
