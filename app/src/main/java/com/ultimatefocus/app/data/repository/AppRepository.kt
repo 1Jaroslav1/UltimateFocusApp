@@ -1,11 +1,15 @@
 /**
  * Repository interface defining the contract for app data operations:
  * querying installed apps, managing favorites, and launching apps.
- * Covers: ULT-5, ULT-6, ULT-7
+ * Also resolves bottom-bar quick-access shortcut targets, materializing either
+ * the user's override or the system default handler for Phone/Camera.
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14
  */
 package com.ultimatefocus.app.data.repository
 
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.domain.model.ShortcutSlot
+import com.ultimatefocus.app.domain.model.ShortcutTarget
 import kotlinx.coroutines.flow.Flow
 
 interface AppRepository {
@@ -15,4 +19,5 @@ interface AppRepository {
     suspend fun toggleFavorite(appInfo: AppInfo)
     suspend fun launchApp(appInfo: AppInfo)
     fun refreshApps()
+    suspend fun resolveShortcut(slot: ShortcutSlot, override: ShortcutTarget?): AppInfo?
 }

@@ -2,12 +2,14 @@
  * Interface for reading and writing user preferences.
  * Decouples ViewModels from the DataStore implementation so they can be
  * unit-tested with a fake in-memory implementation.
- * Covers: ULT-6, ULT-16, ULT-18
+ * Covers: ULT-6, ULT-13, ULT-14, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.domain.repository
 
 import com.ultimatefocus.app.domain.model.FontSize
 import com.ultimatefocus.app.domain.model.HomeAlignment
+import com.ultimatefocus.app.domain.model.ShortcutSlot
+import com.ultimatefocus.app.domain.model.ShortcutTarget
 import com.ultimatefocus.app.domain.model.UserPreferences
 import kotlinx.coroutines.flow.Flow
 
@@ -19,4 +21,5 @@ interface UserPreferencesSource {
     suspend fun updateAutoKeyboard(enabled: Boolean)
     suspend fun updateSearchProviderPackage(packageName: String?)
     suspend fun updateTwoFingerDoubleTapToLock(enabled: Boolean)
+    suspend fun updateShortcut(slot: ShortcutSlot, target: ShortcutTarget?)
 }

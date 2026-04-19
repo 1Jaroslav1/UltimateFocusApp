@@ -3,7 +3,9 @@
  * Persists user preferences (theme, font size, alignment, auto-keyboard, search
  * provider, double-tap-to-lock) to disk and exposes them as a Flow so the UI
  * reacts to changes without polling.
- * Covers: ULT-6, ULT-8, ULT-16, ULT-18
+ * Also persists optional bottom-bar quick-access shortcut overrides (per slot) as
+ * a flattened component-name + label pair; absent keys mean "use the system default".
+ * Covers: ULT-6, ULT-8, ULT-13, ULT-14, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.data.preferences
 
@@ -16,6 +18,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.ultimatefocus.app.domain.model.FontSize
 import com.ultimatefocus.app.domain.model.HomeAlignment
+import com.ultimatefocus.app.domain.model.ShortcutSlot
+import com.ultimatefocus.app.domain.model.ShortcutTarget
 import com.ultimatefocus.app.domain.model.UserPreferences
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -37,6 +41,10 @@ class UserPreferencesDataStore @Inject constructor(
         val AUTO_KEYBOARD = booleanPreferencesKey("auto_keyboard")
         val SEARCH_PROVIDER_PACKAGE = stringPreferencesKey("search_provider_package")
         val TWO_FINGER_DOUBLE_TAP_TO_LOCK = booleanPreferencesKey("two_finger_double_tap_to_lock")
+        val LEFT_SHORTCUT_COMPONENT = stringPreferencesKey("left_shortcut_component")
+        val LEFT_SHORTCUT_LABEL = stringPreferencesKey("left_shortcut_label")
+        val RIGHT_SHORTCUT_COMPONENT = stringPreferencesKey("right_shortcut_component")
+        val RIGHT_SHORTCUT_LABEL = stringPreferencesKey("right_shortcut_label")
     }
 
     override val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -48,6 +56,16 @@ class UserPreferencesDataStore @Inject constructor(
             autoKeyboard = prefs[Keys.AUTO_KEYBOARD] ?: true,
             searchProviderPackage = prefs[Keys.SEARCH_PROVIDER_PACKAGE],
             twoFingerDoubleTapToLockEnabled = prefs[Keys.TWO_FINGER_DOUBLE_TAP_TO_LOCK] ?: false,
+            leftShortcut = readShortcut(
+                prefs,
+                Keys.LEFT_SHORTCUT_COMPONENT,
+                Keys.LEFT_SHORTCUT_LABEL,
+            ),
+            rightShortcut = readShortcut(
+                prefs,
+                Keys.RIGHT_SHORTCUT_COMPONENT,
+                Keys.RIGHT_SHORTCUT_LABEL,
+            ),
         )
     }
 
@@ -76,5 +94,40 @@ class UserPreferencesDataStore @Inject constructor(
 
     override suspend fun updateTwoFingerDoubleTapToLock(enabled: Boolean) {
         context.dataStore.edit { it[Keys.TWO_FINGER_DOUBLE_TAP_TO_LOCK] = enabled }
+    }
+
+    override suspend fun updateShortcut(slot: ShortcutSlot, target: ShortcutTarget?) {
+        val (componentKey, labelKey) = keysFor(slot)
+        context.dataStore.edit { prefs ->
+            if (target == null) {
+                prefs.remove(componentKey)
+                prefs.remove(labelKey)
+            } else {
+                prefs[componentKey] = target.componentName
+                prefs[labelKey] = target.label
+            }
+        }
+    }
+
+    private fun keysFor(
+        slot: ShortcutSlot,
+    ): Pair<Preferences.Key<String>, Preferences.Key<String>> = when (slot) {
+        ShortcutSlot.LEFT -> Keys.LEFT_SHORTCUT_COMPONENT to Keys.LEFT_SHORTCUT_LABEL
+        ShortcutSlot.RIGHT -> Keys.RIGHT_SHORTCUT_COMPONENT to Keys.RIGHT_SHORTCUT_LABEL
+    }
+
+    private fun readShortcut(
+        prefs: Preferences,
+        componentKey: Preferences.Key<String>,
+        labelKey: Preferences.Key<String>,
+    ): ShortcutTarget? {
+        val component = prefs[componentKey] ?: return null
+        val packageName = component.substringBefore('/', missingDelimiterValue = "")
+        if (packageName.isEmpty()) return null
+        return ShortcutTarget(
+            packageName = packageName,
+            componentName = component,
+            label = prefs[labelKey] ?: packageName,
+        )
     }
 }

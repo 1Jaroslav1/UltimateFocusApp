@@ -6,9 +6,11 @@
  * Swipe-up launches the configured web-search provider (ULT-16).
  * Swipe-down opens the notification shade (ULT-17).
  * A two-finger double-tap locks the device when the preference is enabled (ULT-18).
+ * Pins a two-slot quick-access shortcut bar at the bottom that remains
+ * visible even when favorites overflow (ULT-13).
  * A tiny build-hash label in the bottom-right corner identifies the
  * currently installed build during on-device iteration.
- * Covers: ULT-6, ULT-7, ULT-16, ULT-17, ULT-18
+ * Covers: ULT-6, ULT-7, ULT-13, ULT-16, ULT-17, ULT-18
  */
 package com.ultimatefocus.app.ui.home
 
@@ -47,6 +49,7 @@ import com.ultimatefocus.app.domain.model.HomeAlignment
 import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
 import com.ultimatefocus.app.ui.home.components.ClockWidget
 import com.ultimatefocus.app.ui.home.components.FavoritesList
+import com.ultimatefocus.app.ui.home.components.QuickShortcutsBar
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
 import com.ultimatefocus.app.ui.home.components.homeTwoFingerDoubleTap
 import androidx.core.net.toUri
@@ -59,6 +62,8 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val favorites by viewModel.favoriteApps.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val leftShortcut by viewModel.leftShortcut.collectAsStateWithLifecycle()
+    val rightShortcut by viewModel.rightShortcut.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showContextMenu by remember { mutableStateOf(false) }
@@ -112,9 +117,8 @@ fun HomeScreen(
                     selectedApp = app
                     showContextMenu = true
                 },
+                modifier = Modifier.weight(1f),
             )
-
-            Spacer(modifier = Modifier.weight(1f))
 
             if (favorites.isEmpty()) {
                 Text(
@@ -123,10 +127,17 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
-                        .padding(bottom = 32.dp)
+                        .padding(bottom = 16.dp)
                         .testTag("swipe_hint"),
                 )
             }
+
+            QuickShortcutsBar(
+                leftApp = leftShortcut,
+                rightApp = rightShortcut,
+                onTap = { viewModel.launchShortcut(it) },
+                onLongPress = { /* wired in ULT-14 */ },
+            )
         }
 
         if (showContextMenu && selectedApp != null) {
