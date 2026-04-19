@@ -8,7 +8,9 @@
  *   single-finger double-tap, a quick two-finger tap, and a two-finger
  *   long-press all either collided with the HorizontalPager's multi-touch
  *   arbitration or were swallowed higher up in the gesture stack.
- * Covers: ULT-6, ULT-8, ULT-16, ULT-18
+ * leftShortcut / rightShortcut (ULT-13, ULT-14): optional user overrides for
+ *   the bottom-bar quick-access shortcut slots. Null means "use the system default".
+ * Covers: ULT-6, ULT-8, ULT-13, ULT-14, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.domain.model
 
@@ -19,6 +21,8 @@ data class UserPreferences(
     val autoKeyboard: Boolean = true,
     val searchProviderPackage: String? = null,
     val twoFingerDoubleTapToLockEnabled: Boolean = false,
+    val leftShortcut: ShortcutTarget? = null,
+    val rightShortcut: ShortcutTarget? = null,
 )
 
 enum class FontSize(val scaleFactor: Float) {

@@ -1,12 +1,15 @@
 /**
  * In-memory test double for UserPreferencesSource. Returns configurable preference
- * flows without any Android context or DataStore dependency.
- * Covers: ULT-6, ULT-8, ULT-16, ULT-18
+ * flows without any Android context or DataStore dependency. Supports shortcut
+ * assignment mutations used by HomeViewModel tests.
+ * Covers: ULT-6, ULT-8, ULT-13, ULT-14, ULT-16, ULT-18
  */
 package com.ultimatefocus.app.domain.repository
 
 import com.ultimatefocus.app.domain.model.FontSize
 import com.ultimatefocus.app.domain.model.HomeAlignment
+import com.ultimatefocus.app.domain.model.ShortcutSlot
+import com.ultimatefocus.app.domain.model.ShortcutTarget
 import com.ultimatefocus.app.domain.model.UserPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,5 +44,12 @@ class FakeUserPreferencesSource : UserPreferencesSource {
 
     override suspend fun updateTwoFingerDoubleTapToLock(enabled: Boolean) {
         _preferences.value = _preferences.value.copy(twoFingerDoubleTapToLockEnabled = enabled)
+    }
+
+    override suspend fun updateShortcut(slot: ShortcutSlot, target: ShortcutTarget?) {
+        _preferences.value = when (slot) {
+            ShortcutSlot.LEFT -> _preferences.value.copy(leftShortcut = target)
+            ShortcutSlot.RIGHT -> _preferences.value.copy(rightShortcut = target)
+        }
     }
 }
