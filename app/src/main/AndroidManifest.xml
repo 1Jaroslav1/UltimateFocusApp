@@ -65,6 +65,21 @@
             </intent-filter>
         </receiver>
 
+        <!-- ULT-22: NotificationListenerService that cancels notifications from
+             actively-blocked apps. Permission is opt-in — user must enable the
+             listener in Settings. The launcher degrades gracefully without it
+             (blocks still prevent the app from opening; notifications just
+             still appear). -->
+        <service
+            android:name=".service.BlockedAppNotificationListenerService"
+            android:label="@string/notification_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- ULT-18: device-admin receiver that allows the launcher to lock the
              screen via DevicePolicyManager.lockNow() when the user double-taps
              the home screen. Only the `force-lock` policy is requested. -->

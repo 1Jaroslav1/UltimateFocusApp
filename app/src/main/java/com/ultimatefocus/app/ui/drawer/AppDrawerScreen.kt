@@ -43,11 +43,14 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.core.net.toUri
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity
 import com.ultimatefocus.app.ui.components.AppContextMenuDialog
 import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
+import com.ultimatefocus.app.ui.components.NotificationPermissionPrompt
 import com.ultimatefocus.app.ui.drawer.components.AppListItem
 import com.ultimatefocus.app.ui.drawer.components.SearchBar
+import com.ultimatefocus.app.util.NotificationListenerPermission
 
 @Composable
 fun AppDrawerScreen(
@@ -63,6 +66,7 @@ fun AppDrawerScreen(
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
     var showBlockPicker by remember { mutableStateOf(false) }
+    var pendingBlock by remember { mutableStateOf<Pair<AppInfo, BlockDuration>?>(null) }
     val focusRequester = remember { FocusRequester() }
     val launchContext = androidx.compose.ui.platform.LocalContext.current
 
@@ -185,10 +189,33 @@ fun AppDrawerScreen(
         BlockDurationPickerDialog(
             appLabel = selectedApp!!.label,
             onConfirm = { duration ->
-                viewModel.blockApp(selectedApp!!.packageName, duration)
+                val app = selectedApp!!
+                if (NotificationListenerPermission.isGranted(launchContext)) {
+                    viewModel.blockApp(app.packageName, duration)
+                } else {
+                    pendingBlock = app to duration
+                }
             },
             onDismiss = {
                 showBlockPicker = false
+                if (pendingBlock == null) selectedApp = null
+            },
+        )
+    }
+
+    val pending = pendingBlock
+    if (pending != null) {
+        NotificationPermissionPrompt(
+            appLabel = pending.first.label,
+            onGrantAccess = {
+                NotificationListenerPermission.openSettings(launchContext)
+                viewModel.blockApp(pending.first.packageName, pending.second)
+            },
+            onContinueWithout = {
+                viewModel.blockApp(pending.first.packageName, pending.second)
+            },
+            onDismiss = {
+                pendingBlock = null
                 selectedApp = null
             },
         )

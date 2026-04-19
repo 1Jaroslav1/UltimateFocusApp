@@ -48,11 +48,14 @@ import android.provider.Settings
 import androidx.compose.runtime.LaunchedEffect
 import com.ultimatefocus.app.BuildConfig
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.HomeAlignment
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity
 import com.ultimatefocus.app.ui.components.AppContextMenuDialog
 import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
+import com.ultimatefocus.app.ui.components.NotificationPermissionPrompt
 import com.ultimatefocus.app.ui.home.components.ClockWidget
+import com.ultimatefocus.app.util.NotificationListenerPermission
 import com.ultimatefocus.app.ui.home.components.FavoritesList
 import com.ultimatefocus.app.ui.home.components.QuickShortcutsBar
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
@@ -74,6 +77,7 @@ fun HomeScreen(
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
     var showBlockPicker by remember { mutableStateOf(false) }
+    var pendingBlock by remember { mutableStateOf<Pair<AppInfo, BlockDuration>?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.blockedAttempts.collect { blocked ->
@@ -186,10 +190,33 @@ fun HomeScreen(
             BlockDurationPickerDialog(
                 appLabel = selectedApp!!.label,
                 onConfirm = { duration ->
-                    viewModel.blockApp(selectedApp!!.packageName, duration)
+                    val app = selectedApp!!
+                    if (NotificationListenerPermission.isGranted(context)) {
+                        viewModel.blockApp(app.packageName, duration)
+                    } else {
+                        pendingBlock = app to duration
+                    }
                 },
                 onDismiss = {
                     showBlockPicker = false
+                    if (pendingBlock == null) selectedApp = null
+                },
+            )
+        }
+
+        val pending = pendingBlock
+        if (pending != null) {
+            NotificationPermissionPrompt(
+                appLabel = pending.first.label,
+                onGrantAccess = {
+                    NotificationListenerPermission.openSettings(context)
+                    viewModel.blockApp(pending.first.packageName, pending.second)
+                },
+                onContinueWithout = {
+                    viewModel.blockApp(pending.first.packageName, pending.second)
+                },
+                onDismiss = {
+                    pendingBlock = null
                     selectedApp = null
                 },
             )
