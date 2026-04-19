@@ -37,7 +37,15 @@ class BlockedAppViewModel @Inject constructor(
         savedStateHandle.get<Long>(EXTRA_BLOCKED_UNTIL_MS) ?: 0L
     private val durationLabel: String = savedStateHandle[EXTRA_DURATION_LABEL] ?: ""
 
-    private val _uiState = MutableStateFlow(initialState())
+    // Declared BEFORE _uiState because compute() reads this field on first
+    // invocation from the _uiState initializer. Property initializers run in
+    // declaration order; placing this below _uiState left the backing field
+    // null when compute() first ran and crashed the activity on startup.
+    private val unblockDateTimeLabel: String =
+        if (blockedUntilEpochMs > 0L) BlockedTimeFormatter.formatUnblockDateTime(blockedUntilEpochMs)
+        else ""
+
+    private val _uiState = MutableStateFlow(compute())
     val uiState: StateFlow<BlockedAppUiState> = _uiState.asStateFlow()
 
     init {
@@ -47,12 +55,6 @@ class BlockedAppViewModel @Inject constructor(
     fun refresh() {
         _uiState.value = compute()
     }
-
-    private fun initialState(): BlockedAppUiState = compute()
-
-    private val unblockDateTimeLabel: String =
-        if (blockedUntilEpochMs > 0L) BlockedTimeFormatter.formatUnblockDateTime(blockedUntilEpochMs)
-        else ""
 
     private fun compute(): BlockedAppUiState {
         val remaining = (blockedUntilEpochMs - clock.now()).coerceAtLeast(0L)

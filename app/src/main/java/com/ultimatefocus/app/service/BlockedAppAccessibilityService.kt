@@ -17,6 +17,7 @@ package com.ultimatefocus.app.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.ultimatefocus.app.domain.model.BlockedApp
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
@@ -53,8 +54,12 @@ class BlockedAppAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        Log.d(TAG, "connected")
         blockedAppRepository.observeActivePackageNames()
-            .onEach { activeBlocked = it }
+            .onEach {
+                activeBlocked = it
+                Log.d(TAG, "activeBlocked updated: $it")
+            }
             .launchIn(scope)
     }
 
@@ -67,6 +72,7 @@ class BlockedAppAccessibilityService : AccessibilityService() {
             ownPackage = packageName,
         )
         if (decision is ForegroundAction.ShowBlocked) {
+            Log.d(TAG, "redirecting blocked foreground pkg=$pkg")
             scope.launch { showReminder(pkg) }
         }
     }
@@ -94,5 +100,9 @@ class BlockedAppAccessibilityService : AccessibilityService() {
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         startActivity(intent)
+    }
+
+    companion object {
+        private const val TAG = "BlockedAppA11y"
     }
 }
