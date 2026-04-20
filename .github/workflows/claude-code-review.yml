@@ -10,45 +10,56 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      issues: read
+      issues: write
       id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
           show_full_output: true
-          prompt: |
-            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+          direct_prompt: |
+            Review the pull request #${{ github.event.pull_request.number }} in this repository.
 
-            After reviewing the code, post a summary comment on the PR using this exact format:
+            1. First, read the PR diff using `gh pr diff ${{ github.event.pull_request.number }}`
+            2. Analyze all changed files thoroughly
+            3. Then post a comment on the PR using `gh pr comment ${{ github.event.pull_request.number }}` with the following format:
 
-            ## Code Review Report
+            ## 📋 Code Review Report
+
+            ### Scorecard
 
             | Category | Status | Details |
             |----------|--------|---------|
-            | Security & Vulnerabilities | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
-            | Code Quality & Readability | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
-            | Performance | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
-            | Error Handling | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
-            | Architecture & Patterns | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
-            | Testing | ✅ OK / ⚠️ Warning / ❌ Critical | Brief explanation |
+            | 🔒 Security & Vulnerabilities | ✅ OK / ⚠️ Medium / ❌ Critical | explanation |
+            | 📖 Code Quality & Readability | ✅ OK / ⚠️ Medium / ❌ Critical | explanation |
+            | ⚡ Performance | ✅ OK / ⚠️ Medium / ❌ Critical | explanation |
+            | 🛡️ Error Handling | ✅ OK / ⚠️ Medium / ❌ Critical | explanation |
+            | 🏗️ Architecture & Patterns | ✅ OK / ⚠️ Medium / ❌ Critical | explanation |
+            | 🧪 Testing | ✅ OK / ⚠️ Medium / ❌ Critical | explanation |
+            | 📱 Android Best Practices | ✅ OK / ⚠️ Medium / ❌ Critical | explanation |
 
-            ### Overall Risk: Low / Medium / High
+            ### 🎯 Overall Risk: 🟢 Low / 🟡 Medium / 🔴 High
 
-            ### Key Findings
-            - List the most important findings here
+            ### 📊 Summary
+            - Files reviewed: X
+            - Issues found: X
+            - Critical: X | Warnings: X | Info: X
 
-            ### Recommendations
-            - List actionable improvements here
+            ### 🔍 Key Findings
+            List the most important findings with file references
 
-            Use only ONE status per category (✅, ⚠️, or ❌). Be specific in the Details column.
+            ### 💡 Recommendations
+            List actionable improvements
+
+            ---
+            _Reviewed by Claude Code_
+
+            IMPORTANT: You MUST post this as a PR comment using the gh CLI. Do not just output it.
