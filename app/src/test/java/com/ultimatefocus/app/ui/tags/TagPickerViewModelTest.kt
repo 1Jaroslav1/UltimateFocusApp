@@ -10,7 +10,9 @@ package com.ultimatefocus.app.ui.tags
 import com.ultimatefocus.app.data.local.dao.FakeAppTagDao
 import com.ultimatefocus.app.data.local.dao.FakeBlockedTagDao
 import com.ultimatefocus.app.data.local.dao.FakeTagDao
+import com.ultimatefocus.app.data.repository.BlockedTagRepositoryImpl
 import com.ultimatefocus.app.data.repository.TagRepositoryImpl
+import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.MAX_TAGS_PER_APP
 import com.ultimatefocus.app.domain.model.TagColor
 import com.ultimatefocus.app.domain.service.FakeClock
@@ -34,15 +36,23 @@ class TagPickerViewModelTest {
     private val dispatcher = UnconfinedTestDispatcher()
     private lateinit var tagDao: FakeTagDao
     private lateinit var appTagDao: FakeAppTagDao
+    private lateinit var blockedTagDao: FakeBlockedTagDao
+    private lateinit var clock: FakeClock
     private lateinit var repo: TagRepositoryImpl
+    private lateinit var blockedTagRepo: BlockedTagRepositoryImpl
 
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         tagDao = FakeTagDao()
         appTagDao = FakeAppTagDao()
-        repo = TagRepositoryImpl(tagDao, appTagDao, FakeBlockedTagDao(), FakeClock(0L))
+        blockedTagDao = FakeBlockedTagDao()
+        clock = FakeClock(0L)
+        repo = TagRepositoryImpl(tagDao, appTagDao, blockedTagDao, clock)
+        blockedTagRepo = BlockedTagRepositoryImpl(blockedTagDao, clock)
     }
+
+    private fun newVm() = TagPickerViewModel(repo, blockedTagRepo)
 
     @After
     fun tearDown() {
@@ -57,7 +67,7 @@ class TagPickerViewModelTest {
         val tagB = repo.createTag("B", TagColor.SAGE_GREEN).getOrThrow()
         repo.assignTag("com.app", tagA.id).getOrThrow()
 
-        val vm = TagPickerViewModel(repo)
+        val vm = newVm()
         vm.setPackages(listOf("com.app"))
 
         val state = vm.uiState.first { !it.isLoading && it.items.size == 2 }
@@ -97,7 +107,7 @@ class TagPickerViewModelTest {
             repo.assignTag("com.full", id).getOrThrow()
         }
 
-        val vm = TagPickerViewModel(repo)
+        val vm = newVm()
         vm.setPackages(listOf("com.full"))
 
         val state = vm.uiState.first { !it.isLoading && it.items.size == colors.size }
@@ -116,7 +126,7 @@ class TagPickerViewModelTest {
         val tag = repo.createTag("Social", TagColor.STEEL_BLUE).getOrThrow()
         repo.assignTag("com.a", tag.id).getOrThrow()
         // com.b and com.c don't have it
-        val vm = TagPickerViewModel(repo)
+        val vm = newVm()
         vm.setPackages(listOf("com.a", "com.b", "com.c"))
 
         val state = vm.uiState.first { !it.isLoading && it.items.size == 1 }
@@ -128,7 +138,7 @@ class TagPickerViewModelTest {
         val tag = repo.createTag("Social", TagColor.STEEL_BLUE).getOrThrow()
         repo.assignTag("com.a", tag.id).getOrThrow()
         repo.assignTag("com.b", tag.id).getOrThrow()
-        val vm = TagPickerViewModel(repo)
+        val vm = newVm()
         vm.setPackages(listOf("com.a", "com.b"))
 
         val initial = vm.uiState.first { !it.isLoading && it.items.size == 1 }
@@ -146,7 +156,7 @@ class TagPickerViewModelTest {
     fun `bulk some-assigned toggles to all-assigned`() = runTest(dispatcher) {
         val tag = repo.createTag("Social", TagColor.STEEL_BLUE).getOrThrow()
         repo.assignTag("com.a", tag.id).getOrThrow()
-        val vm = TagPickerViewModel(repo)
+        val vm = newVm()
         vm.setPackages(listOf("com.a", "com.b"))
 
         val initial = vm.uiState.first { !it.isLoading && it.items.size == 1 }
@@ -163,10 +173,44 @@ class TagPickerViewModelTest {
     @Test
     fun `empty packages list emits empty items`() = runTest(dispatcher) {
         repo.createTag("Social", TagColor.STEEL_BLUE)
-        val vm = TagPickerViewModel(repo)
+        val vm = newVm()
         vm.setPackages(emptyList())
 
         val state = vm.uiState.first { !it.isLoading }
         assertTrue(state.items.isEmpty())
+    }
+
+    // ── Blocked-tag rows are uneditable (ULT-75 follow-up) ─────────────────
+
+    @Test
+    fun `blocked tag surfaces TagBlocked disabledReason`() = runTest(dispatcher) {
+        val tag = repo.createTag("Social", TagColor.STEEL_BLUE).getOrThrow()
+        blockedTagRepo.blockTag(tag.id, BlockDuration.HOUR_1)
+
+        val vm = newVm()
+        vm.setPackages(listOf("com.app"))
+
+        val state = vm.uiState.first { st -> !st.isLoading && st.items.size == 1 }
+        val item = state.items[0]
+        assertTrue(item.disabled)
+        assertEquals(TagPickerDisabledReason.TagBlocked, item.disabledReason)
+    }
+
+    @Test
+    fun `blocked reason wins over the 5-tag-cap reason`() = runTest(dispatcher) {
+        // Fill the app with 5 tags so the cap would otherwise apply to a 6th.
+        val tags = TagColor.values().take(MAX_TAGS_PER_APP + 1).mapIndexed { idx, c ->
+            repo.createTag("T$idx", c).getOrThrow()
+        }
+        tags.take(MAX_TAGS_PER_APP).forEach { repo.assignTag("com.full", it.id).getOrThrow() }
+        // Block the 6th tag.
+        blockedTagRepo.blockTag(tags.last().id, BlockDuration.HOUR_1)
+
+        val vm = newVm()
+        vm.setPackages(listOf("com.full"))
+        val state = vm.uiState.first { st -> !st.isLoading && st.items.size == tags.size }
+        val sixth = state.items.first { it.tag.id == tags.last().id }
+        // TagBlocked reason wins — even though AppAtMaxTags would also apply.
+        assertEquals(TagPickerDisabledReason.TagBlocked, sixth.disabledReason)
     }
 }

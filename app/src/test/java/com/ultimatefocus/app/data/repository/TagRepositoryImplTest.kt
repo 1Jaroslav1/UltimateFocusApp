@@ -172,20 +172,81 @@ class TagRepositoryImplTest {
     @Test
     fun `deleteTag succeeds after the tag block has expired`() = runTest {
         val tag = repo.createTag("Locked", TagColor.SAGE_GREEN).getOrThrow()
-        blockedTagDao.upsert(
-            com.ultimatefocus.app.data.local.entity.BlockedTagEntity(
-                tagId = tag.id,
-                blockedUntilEpochMs = clock.current + 60 * 60_000L,
-                blockedSinceEpochMs = clock.current,
-                durationLabel = "1h",
-            ),
-        )
+        seedActiveBlock(tag.id, durationMs = 60 * 60_000L)
         // Advance past the block.
         clock.current += 60 * 60_000L + 1L
 
         val result = repo.deleteTag(tag.id)
         assertTrue(result.isSuccess)
         assertNull(repo.getTag(tag.id))
+    }
+
+    // ── No write to a blocked tag (ULT-75 follow-up) ───────────────────────
+
+    @Test
+    fun `updateTag fails while the tag block is active`() = runTest {
+        val tag = repo.createTag("Locked", TagColor.SAGE_GREEN).getOrThrow()
+        seedActiveBlock(tag.id, durationMs = 60 * 60_000L)
+        val result = repo.updateTag(tag.id, "Renamed", TagColor.AMBER_GOLD)
+        assertTrue(result.isFailure)
+        assertEquals(TagOperationError.TagCurrentlyBlocked, result.exceptionOrNull())
+        // Tag unchanged.
+        val unchanged = repo.getTag(tag.id)!!
+        assertEquals("Locked", unchanged.name)
+        assertEquals(TagColor.SAGE_GREEN, unchanged.color)
+    }
+
+    @Test
+    fun `assignTag fails while the tag block is active`() = runTest {
+        val tag = repo.createTag("Locked", TagColor.SAGE_GREEN).getOrThrow()
+        seedActiveBlock(tag.id, durationMs = 60 * 60_000L)
+        val result = repo.assignTag("com.app", tag.id)
+        assertTrue(result.isFailure)
+        assertEquals(TagOperationError.TagCurrentlyBlocked, result.exceptionOrNull())
+        // Cross-ref not created.
+        assertTrue(appTagDao.snapshot().isEmpty())
+    }
+
+    @Test
+    fun `bulkAssignTag fails while the tag block is active`() = runTest {
+        val tag = repo.createTag("Locked", TagColor.SAGE_GREEN).getOrThrow()
+        seedActiveBlock(tag.id, durationMs = 60 * 60_000L)
+        val result = repo.bulkAssignTag(listOf("com.a", "com.b"), tag.id)
+        assertTrue(result.isFailure)
+        assertEquals(TagOperationError.TagCurrentlyBlocked, result.exceptionOrNull())
+        assertTrue(appTagDao.snapshot().isEmpty())
+    }
+
+    @Test
+    fun `unassignTag silently no-ops while the tag block is active`() = runTest {
+        val tag = repo.createTag("Locked", TagColor.SAGE_GREEN).getOrThrow()
+        // Pre-existing assignment from before the block began.
+        appTagDao.insert(com.ultimatefocus.app.data.local.entity.AppTagCrossRef("com.a", tag.id))
+        seedActiveBlock(tag.id, durationMs = 60 * 60_000L)
+        repo.unassignTag("com.a", tag.id)
+        // Cross-ref still present — block protects the assignment.
+        assertEquals(1, appTagDao.snapshot().size)
+    }
+
+    @Test
+    fun `bulkUnassignTag silently no-ops while the tag block is active`() = runTest {
+        val tag = repo.createTag("Locked", TagColor.SAGE_GREEN).getOrThrow()
+        appTagDao.insert(com.ultimatefocus.app.data.local.entity.AppTagCrossRef("com.a", tag.id))
+        appTagDao.insert(com.ultimatefocus.app.data.local.entity.AppTagCrossRef("com.b", tag.id))
+        seedActiveBlock(tag.id, durationMs = 60 * 60_000L)
+        repo.bulkUnassignTag(listOf("com.a", "com.b"), tag.id)
+        assertEquals(2, appTagDao.snapshot().size)
+    }
+
+    private suspend fun seedActiveBlock(tagId: Long, durationMs: Long) {
+        blockedTagDao.upsert(
+            com.ultimatefocus.app.data.local.entity.BlockedTagEntity(
+                tagId = tagId,
+                blockedUntilEpochMs = clock.current + durationMs,
+                blockedSinceEpochMs = clock.current,
+                durationLabel = "1h",
+            ),
+        )
     }
 
     // ── observeTags ─────────────────────────────────────────────────────────

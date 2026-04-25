@@ -68,13 +68,16 @@ fun TagPickerDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val tagRepository = remember(context) {
-        EntryPointAccessors.fromApplication(
+    val viewModel = remember(context) {
+        val entry = EntryPointAccessors.fromApplication(
             context.applicationContext,
             TagsEntryPoint::class.java,
-        ).tagRepository()
+        )
+        TagPickerViewModel(
+            tagRepository = entry.tagRepository(),
+            blockedTagRepository = entry.blockedTagRepository(),
+        )
     }
-    val viewModel = remember(tagRepository) { TagPickerViewModel(tagRepository) }
 
     LaunchedEffect(packageNames) {
         viewModel.setPackages(packageNames)
@@ -188,9 +191,16 @@ private fun TagPickerRow(
                 color = labelColor,
                 fontSize = 14.sp,
             )
-            if (item.disabled) {
+            val disabledMessage = when (item.disabledReason) {
+                TagPickerDisabledReason.AppAtMaxTags ->
+                    "App already has the maximum 5 tags."
+                TagPickerDisabledReason.TagBlocked ->
+                    "Tag is currently blocked."
+                null -> null
+            }
+            if (disabledMessage != null) {
                 Text(
-                    text = "App already has the maximum 5 tags.",
+                    text = disabledMessage,
                     color = Color.Gray,
                     fontSize = 11.sp,
                     modifier = Modifier.testTag("tag_picker_disabled_message_${item.tag.id}"),

@@ -64,7 +64,7 @@ class TagPickerDialogContentTest {
                 TagPickerDialogContent(
                     state = TagPickerUiState(
                         items = listOf(
-                            TagPickerItem(tag = tag, state = TagAssignmentState.NoneAssigned, disabled = false),
+                            TagPickerItem(tag = tag, state = TagAssignmentState.NoneAssigned, disabledReason = null),
                         ),
                         packagesUnderEdit = listOf("com.app"),
                         isLoading = false,
@@ -87,7 +87,7 @@ class TagPickerDialogContentTest {
                 TagPickerDialogContent(
                     state = TagPickerUiState(
                         items = listOf(
-                            TagPickerItem(tag = tag, state = TagAssignmentState.AllAssigned, disabled = false),
+                            TagPickerItem(tag = tag, state = TagAssignmentState.AllAssigned, disabledReason = null),
                         ),
                         packagesUnderEdit = listOf("com.app"),
                         isLoading = false,
@@ -109,7 +109,7 @@ class TagPickerDialogContentTest {
                 TagPickerDialogContent(
                     state = TagPickerUiState(
                         items = listOf(
-                            TagPickerItem(tag = tag, state = TagAssignmentState.SomeAssigned, disabled = false),
+                            TagPickerItem(tag = tag, state = TagAssignmentState.SomeAssigned, disabledReason = null),
                         ),
                         packagesUnderEdit = listOf("com.a", "com.b"),
                         isLoading = false,
@@ -124,14 +124,14 @@ class TagPickerDialogContentTest {
     }
 
     @Test
-    fun disabled_row_shows_explanatory_message() {
+    fun disabled_row_shows_explanatory_message_for_app_cap() {
         val tag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
         composeRule.setContent {
             UltimateFocusTheme {
                 TagPickerDialogContent(
                     state = TagPickerUiState(
                         items = listOf(
-                            TagPickerItem(tag = tag, state = TagAssignmentState.NoneAssigned, disabled = true),
+                            TagPickerItem(tag = tag, state = TagAssignmentState.NoneAssigned, disabledReason = TagPickerDisabledReason.AppAtMaxTags),
                         ),
                         packagesUnderEdit = listOf("com.app"),
                         isLoading = false,
@@ -143,6 +143,34 @@ class TagPickerDialogContentTest {
             }
         }
         composeRule.onNodeWithTag("tag_picker_disabled_message_${tag.id}").assertIsDisplayed()
+        composeRule.onNodeWithText("App already has the maximum 5 tags.").assertIsDisplayed()
+    }
+
+    @Test
+    fun blocked_row_shows_tag_blocked_message() {
+        val tag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
+        composeRule.setContent {
+            UltimateFocusTheme {
+                TagPickerDialogContent(
+                    state = TagPickerUiState(
+                        items = listOf(
+                            TagPickerItem(
+                                tag = tag,
+                                state = TagAssignmentState.AllAssigned,
+                                disabledReason = TagPickerDisabledReason.TagBlocked,
+                            ),
+                        ),
+                        packagesUnderEdit = listOf("com.app"),
+                        isLoading = false,
+                    ),
+                    onToggle = {},
+                    onManageTags = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tag_picker_disabled_message_${tag.id}").assertIsDisplayed()
+        composeRule.onNodeWithText("Tag is currently blocked.").assertIsDisplayed()
     }
 
     @Test

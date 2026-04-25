@@ -6,8 +6,12 @@
  * Cross-ref deletion happens via FK cascade in AppTagCrossRef when a tag
  * row is removed; we also wipe the cross-ref explicitly inside deleteTag
  * so the contract is testable without relying on FK cascade simulation.
- * deleteTag refuses while a tag-block is active (ULT-75 follow-up): users
- * cannot delete a tag mid-block, mirroring the no-self-unblock invariant.
+ * Every WRITE method (update, delete, assign, bulkAssign) refuses while a
+ * tag-block on the target tag is active (ULT-75 follow-up): mirrors the
+ * no-self-unblock invariant — users cannot weaken an active tag-block by
+ * editing the tag, deleting it, or unassigning its apps. Unassign methods
+ * silently no-op while blocked (the picker UI gates user input; the
+ * repository early-return is defense in depth).
  * Covers: ULT-72, ULT-73, ULT-75
  */
 package com.ultimatefocus.app.data.repository
@@ -89,6 +93,9 @@ class TagRepositoryImpl @Inject constructor(
             return Result.failure(TagOperationError.NameBlank(name))
         }
         val existing = tagDao.getById(id) ?: return Result.failure(TagOperationError.TagNotFound)
+        if (isTagBlocked(id)) {
+            return Result.failure(TagOperationError.TagCurrentlyBlocked)
+        }
         val collision = tagDao.getByColor(color.hex)
         if (collision != null && collision.id != id) {
             return Result.failure(TagOperationError.ColorAlreadyUsed)
@@ -101,11 +108,7 @@ class TagRepositoryImpl @Inject constructor(
         if (tagDao.getById(id) == null) {
             return Result.failure(TagOperationError.TagNotFound)
         }
-        // Refuse while a tag-block is active. Mirrors the ULT-19/21
-        // no-self-unblock invariant — a user cannot escape a tag-block by
-        // deleting the tag.
-        val activeBlock = blockedTagDao.getByTag(id)
-        if (activeBlock != null && activeBlock.blockedUntilEpochMs > clock.now()) {
+        if (isTagBlocked(id)) {
             return Result.failure(TagOperationError.TagCurrentlyBlocked)
         }
         // Explicit cleanup of cross-refs so the contract is testable without
@@ -124,11 +127,17 @@ class TagRepositoryImpl @Inject constructor(
         if (tagDao.getById(tagId) == null) {
             return Result.failure(TagOperationError.TagNotFound)
         }
+        if (isTagBlocked(tagId)) {
+            return Result.failure(TagOperationError.TagCurrentlyBlocked)
+        }
         appTagDao.insert(AppTagCrossRef(packageName, tagId))
         return Result.success(Unit)
     }
 
     override suspend fun unassignTag(packageName: String, tagId: Long) {
+        // Silent no-op while blocked — the picker UI disables blocked rows so
+        // the user cannot reach this branch through normal interaction.
+        if (isTagBlocked(tagId)) return
         appTagDao.delete(packageName, tagId)
     }
 
@@ -138,6 +147,9 @@ class TagRepositoryImpl @Inject constructor(
     ): Result<Unit> {
         if (tagDao.getById(tagId) == null) {
             return Result.failure(TagOperationError.TagNotFound)
+        }
+        if (isTagBlocked(tagId)) {
+            return Result.failure(TagOperationError.TagCurrentlyBlocked)
         }
         // Per-app cap is enforced individually so that an over-cap app does not
         // poison the whole batch — apps with room get the tag, apps at the cap
@@ -160,7 +172,13 @@ class TagRepositoryImpl @Inject constructor(
 
     override suspend fun bulkUnassignTag(packageNames: List<String>, tagId: Long) {
         if (packageNames.isEmpty()) return
+        if (isTagBlocked(tagId)) return
         appTagDao.deleteByPackagesForTag(packageNames, tagId)
+    }
+
+    private suspend fun isTagBlocked(tagId: Long): Boolean {
+        val row = blockedTagDao.getByTag(tagId) ?: return false
+        return row.blockedUntilEpochMs > clock.now()
     }
 
     private fun TagEntity.toDomain(): Tag? {

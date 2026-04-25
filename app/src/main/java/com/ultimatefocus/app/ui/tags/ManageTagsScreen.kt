@@ -336,7 +336,7 @@ private fun TagOperationError.toUiMessage(): String = when (this) {
     TagOperationError.ColorAlreadyUsed -> "That color is already in use by another tag."
     TagOperationError.AppTagLimitReached -> "App already has the maximum 5 tags."
     TagOperationError.TagNotFound -> "That tag no longer exists."
-    TagOperationError.TagCurrentlyBlocked -> "Cannot delete a tag while its block is active."
+    TagOperationError.TagCurrentlyBlocked -> "Cannot modify a tag while its block is active."
     is TagOperationError.NameBlank -> "Tag name cannot be blank."
 }
 
@@ -354,28 +354,28 @@ private fun TagRowActionMenu(
         onDismiss = onDismiss,
         modifier = Modifier.testTag("tag_row_menu"),
     ) {
-        // NOTE: callers transition the parent's single TagDialogState to a
-        // new dialog inside onEdit / onBlock / onDelete. Do NOT also fire
-        // onDismiss here — that would write Hidden right after the new
-        // state and the next dialog would never appear (the original
-        // "Edit button does nothing" bug). Outside-tap still hits onDismiss
-        // via DefaultAppModal's onDismissRequest.
-        DefaultModalAction(
-            text = "Edit",
-            onClick = onEdit,
-            modifier = Modifier.testTag("tag_row_menu_edit"),
-        )
-
         if (isBlocked) {
-            // Read-only status row mirrors the AppContextMenuDialog "Blocked —
-            // X remaining" pattern. Hides both Block-by-tag (already in
-            // effect) and Delete (cannot delete a tag whose block is active
-            // — repository enforces the same rule as a safety net).
+            // While a tag-block is active, every management op is forbidden:
+            // edit (rename/color), delete, re-block, and tag assignment all
+            // fail at the repository layer (TagOperationError.TagCurrentlyBlocked).
+            // Surface a single read-only status row so the user understands
+            // the menu is intentionally inert until the block expires.
             DefaultModalStatusRow(
-                text = "Blocked — cannot delete or re-block",
+                text = "Blocked — cannot edit, delete, or re-block",
                 modifier = Modifier.testTag("tag_row_menu_blocked_status"),
             )
         } else {
+            // NOTE: callers transition the parent's single TagDialogState to
+            // a new dialog inside onEdit / onBlock / onDelete. Do NOT also
+            // fire onDismiss here — that would write Hidden right after the
+            // new state and the next dialog would never appear (the original
+            // "Edit button does nothing" bug). Outside-tap still hits
+            // onDismiss via DefaultAppModal's onDismissRequest.
+            DefaultModalAction(
+                text = "Edit",
+                onClick = onEdit,
+                modifier = Modifier.testTag("tag_row_menu_edit"),
+            )
             DefaultModalAction(
                 text = "Block by tag…",
                 onClick = onBlock,
