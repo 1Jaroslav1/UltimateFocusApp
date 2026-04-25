@@ -86,7 +86,7 @@ fun BlockingSchedulesListContent(
             }
             Text(
                 text = "Blocking schedules",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier
                     .weight(1f)

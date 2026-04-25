@@ -121,7 +121,7 @@ fun BlockingScheduleEditorScreen(
             }
             Text(
                 text = if (uiState.isEditMode) "Edit schedule" else "New schedule",
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(start = 8.dp),
             )
