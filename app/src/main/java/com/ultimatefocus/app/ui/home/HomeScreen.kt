@@ -9,10 +9,11 @@
  * Pins a two-slot quick-access shortcut bar at the bottom that remains
  * visible even when favorites overflow (ULT-13).
  * Long-pressing a favorite opens a context menu that routes a "Block app…"
- * tap to the duration picker + confirmation flow (ULT-20).
+ * tap to the duration picker + confirmation flow (ULT-20) and a "Manage
+ * tags…" tap to the TagPickerDialog scoped to that single app (ULT-73).
  * A tiny build-hash label in the bottom-right corner identifies the
  * currently installed build during on-device iteration.
- * Covers: ULT-6, ULT-7, ULT-13, ULT-16, ULT-17, ULT-18, ULT-20
+ * Covers: ULT-6, ULT-7, ULT-13, ULT-16, ULT-17, ULT-18, ULT-20, ULT-73
  */
 package com.ultimatefocus.app.ui.home
 
@@ -62,11 +63,13 @@ import com.ultimatefocus.app.ui.home.components.FavoritesList
 import com.ultimatefocus.app.ui.home.components.QuickShortcutsBar
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
 import com.ultimatefocus.app.ui.home.components.homeTwoFingerDoubleTap
+import com.ultimatefocus.app.ui.tags.TagPickerDialog
 import androidx.core.net.toUri
 
 @Composable
 fun HomeScreen(
     onOpenDrawer: () -> Unit,
+    onOpenManageTags: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -79,6 +82,7 @@ fun HomeScreen(
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
     var showBlockPicker by remember { mutableStateOf(false) }
+    var tagPickerPackages by remember { mutableStateOf<List<String>>(emptyList()) }
     var pendingBlock by remember {
         mutableStateOf<Triple<AppInfo, BlockDuration, BlockPromptStep>?>(null)
     }
@@ -180,6 +184,10 @@ fun HomeScreen(
                     showContextMenu = false
                     showBlockPicker = true
                 },
+                onManageTags = { app ->
+                    showContextMenu = false
+                    tagPickerPackages = listOf(app.packageName)
+                },
                 onAppInfo = { app ->
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                         data = "package:${app.packageName}".toUri()
@@ -188,6 +196,20 @@ fun HomeScreen(
                     context.startActivity(intent)
                 },
                 onDismiss = { showContextMenu = false },
+            )
+        }
+
+        if (tagPickerPackages.isNotEmpty()) {
+            TagPickerDialog(
+                packageNames = tagPickerPackages,
+                onManageTags = {
+                    tagPickerPackages = emptyList()
+                    onOpenManageTags()
+                },
+                onDismiss = {
+                    tagPickerPackages = emptyList()
+                    selectedApp = null
+                },
             )
         }
 

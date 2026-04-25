@@ -81,6 +81,11 @@ fun NavGraph(navController: NavHostController) {
                         onOpenDrawer = {
                             coroutineScope.launch { pagerState.animateScrollToPage(1) }
                         },
+                        onOpenManageTags = {
+                            navController.navigate(Screen.ManageTags.route) {
+                                launchSingleTop = true
+                            }
+                        },
                     )
                     1 -> AppDrawerScreen(
                         isActive = pagerState.currentPage == 1,
