@@ -100,7 +100,11 @@ fun NavGraph(navController: NavHostController) {
                         Screen.BlockingScheduleEditor.routeFor(null),
                     ) { launchSingleTop = true }
                 },
-                onEditSchedule = null,
+                onEditSchedule = { id ->
+                    navController.navigate(
+                        Screen.BlockingScheduleEditor.routeFor(id),
+                    ) { launchSingleTop = true }
+                },
             )
         }
 
