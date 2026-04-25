@@ -3,7 +3,9 @@
  * Home and Drawer live inside a HorizontalPager for smooth, finger-following
  * swipe transitions. Settings, BlockingSchedules, and BlockingScheduleEditor
  * are pushed on top via standard NavHost navigation with horizontal slide
- * transitions for visual consistency.
+ * transitions for visual consistency. Each pushed route is wrapped in
+ * SwipeBackContainer so a left-edge swipe-right pops the back stack — the
+ * default interactive-back gesture for any future pushed screens.
  * Covers: ULT-5, ULT-6, ULT-7, ULT-8, ULT-24, ULT-25
  */
 package com.ultimatefocus.app.ui.navigation
@@ -26,6 +28,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ultimatefocus.app.ui.blocking.BlockingScheduleEditorScreen
 import com.ultimatefocus.app.ui.blocking.BlockingSchedulesListScreen
+import com.ultimatefocus.app.ui.components.SwipeBackContainer
 import com.ultimatefocus.app.ui.drawer.AppDrawerScreen
 import com.ultimatefocus.app.ui.home.HomeScreen
 import com.ultimatefocus.app.ui.settings.SettingsScreen
@@ -78,14 +81,16 @@ fun NavGraph(navController: NavHostController) {
             enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
             exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
-            SettingsScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToBlockingSchedules = {
-                    navController.navigate(Screen.BlockingSchedules.route) {
-                        launchSingleTop = true
-                    }
-                },
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                SettingsScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToBlockingSchedules = {
+                        navController.navigate(Screen.BlockingSchedules.route) {
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
         }
 
         composable(
@@ -93,19 +98,21 @@ fun NavGraph(navController: NavHostController) {
             enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
             exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
-            BlockingSchedulesListScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onAddSchedule = {
-                    navController.navigate(
-                        Screen.BlockingScheduleEditor.routeFor(null),
-                    ) { launchSingleTop = true }
-                },
-                onEditSchedule = { id ->
-                    navController.navigate(
-                        Screen.BlockingScheduleEditor.routeFor(id),
-                    ) { launchSingleTop = true }
-                },
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                BlockingSchedulesListScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onAddSchedule = {
+                        navController.navigate(
+                            Screen.BlockingScheduleEditor.routeFor(null),
+                        ) { launchSingleTop = true }
+                    },
+                    onEditSchedule = { id ->
+                        navController.navigate(
+                            Screen.BlockingScheduleEditor.routeFor(id),
+                        ) { launchSingleTop = true }
+                    },
+                )
+            }
         }
 
         composable(
@@ -119,9 +126,11 @@ fun NavGraph(navController: NavHostController) {
             enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
             exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
-            BlockingScheduleEditorScreen(
-                onNavigateBack = { navController.popBackStack() },
-            )
+            SwipeBackContainer(onBack = { navController.popBackStack() }) {
+                BlockingScheduleEditorScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }
