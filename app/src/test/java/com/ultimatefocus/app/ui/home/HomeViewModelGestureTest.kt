@@ -8,6 +8,7 @@ package com.ultimatefocus.app.ui.home
 
 import com.ultimatefocus.app.data.repository.FakeAppRepository
 import com.ultimatefocus.app.domain.model.UserPreferences
+import com.ultimatefocus.app.domain.repository.FakeBlockedAppRepository
 import com.ultimatefocus.app.domain.repository.FakeUserPreferencesSource
 import com.ultimatefocus.app.domain.service.FakeSystemActions
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +43,7 @@ class HomeViewModelGestureTest {
             appRepository = fakeRepository,
             preferencesSource = fakePreferences,
             systemActions = fakeSystemActions,
+            blockedAppRepository = FakeBlockedAppRepository(),
         )
     }
 

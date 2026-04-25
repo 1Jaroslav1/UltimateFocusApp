@@ -2,11 +2,14 @@
  * In-memory test double for AppRepository. Used in ViewModel unit tests to avoid
  * Android system dependencies (LauncherApps, Room). Covers all AppRepository operations
  * including shortcut resolution for bottom-bar quick-access slots.
- * Covers: ULT-6, ULT-7, ULT-8, ULT-13, ULT-14
+ * launchApp returns a LaunchResult so tests can simulate a blocked attempt by
+ * setting `blockedResultFor` (ULT-21).
+ * Covers: ULT-6, ULT-7, ULT-8, ULT-13, ULT-14, ULT-20, ULT-21
  */
 package com.ultimatefocus.app.data.repository
 
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.domain.model.LaunchResult
 import com.ultimatefocus.app.domain.model.ShortcutSlot
 import com.ultimatefocus.app.domain.model.ShortcutTarget
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +22,9 @@ class FakeAppRepository : AppRepository {
     private val _favorites = MutableStateFlow<List<AppInfo>>(emptyList())
     var launchedApp: AppInfo? = null
     var refreshCallCount = 0
+
+    /** If non-null, launchApp returns this Blocked result instead of launching. */
+    var blockedResultFor: (String) -> LaunchResult.Blocked? = { null }
 
     /** Defaults returned by resolveShortcut when the override is null or cannot be matched. */
     val defaultShortcuts: MutableMap<ShortcutSlot, AppInfo?> =
@@ -45,8 +51,11 @@ class FakeAppRepository : AppRepository {
         }
     }
 
-    override suspend fun launchApp(appInfo: AppInfo) {
+    override suspend fun launchApp(appInfo: AppInfo): LaunchResult {
+        val blocked = blockedResultFor(appInfo.packageName)
+        if (blocked != null) return blocked
         launchedApp = appInfo
+        return LaunchResult.Launched
     }
 
     override fun refreshApps() { refreshCallCount++ }

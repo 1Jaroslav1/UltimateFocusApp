@@ -2,20 +2,28 @@
  * Hilt DI modules that wire together the data layer:
  * - DatabaseModule  : provides Room database and DAOs
  * - RepositoryModule: binds AppRepository + UserPreferencesSource + SystemActions
- * Covers: ULT-5, ULT-16, ULT-17, ULT-18
+ *                     + BlockedAppRepository + Clock
+ * Database uses fallbackToDestructiveMigration because the app is pre-release
+ * MVP — schema bumps (e.g. ULT-20 adding blocked_apps) wipe prior data.
+ * Covers: ULT-5, ULT-16, ULT-17, ULT-18, ULT-20
  */
 package com.ultimatefocus.app.di
 
 import android.content.Context
 import androidx.room.Room
 import com.ultimatefocus.app.data.local.AppDatabase
+import com.ultimatefocus.app.data.local.dao.BlockedAppDao
 import com.ultimatefocus.app.data.local.dao.FavoriteDao
 import com.ultimatefocus.app.data.preferences.UserPreferencesDataStore
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.data.repository.AppRepositoryImpl
+import com.ultimatefocus.app.data.repository.BlockedAppRepositoryImpl
 import com.ultimatefocus.app.data.system.SystemActionsImpl
+import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
+import com.ultimatefocus.app.domain.service.Clock
 import com.ultimatefocus.app.domain.service.SystemActions
+import com.ultimatefocus.app.domain.service.SystemClock
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -31,10 +39,15 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, "minimalist_launcher.db").build()
+        Room.databaseBuilder(context, AppDatabase::class.java, "minimalist_launcher.db")
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
 
     @Provides
     fun provideFavoriteDao(database: AppDatabase): FavoriteDao = database.favoriteDao()
+
+    @Provides
+    fun provideBlockedAppDao(database: AppDatabase): BlockedAppDao = database.blockedAppDao()
 }
 
 @Module
@@ -52,4 +65,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSystemActions(impl: SystemActionsImpl): SystemActions
+
+    @Binds
+    @Singleton
+    abstract fun bindBlockedAppRepository(impl: BlockedAppRepositoryImpl): BlockedAppRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindClock(impl: SystemClock): Clock
 }

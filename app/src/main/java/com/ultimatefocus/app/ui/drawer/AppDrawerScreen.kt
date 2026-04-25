@@ -4,7 +4,9 @@
  * screen; dismissible by swiping right or pressing back (ULT-7).
  * When the auto-keyboard setting is enabled the search field gains focus
  * automatically on entry, prompting intentional typing (ULT-8).
- * Covers: ULT-7, ULT-8
+ * Long-pressing a row routes through the block-aware context menu +
+ * duration picker (ULT-20).
+ * Covers: ULT-7, ULT-8, ULT-20
  */
 package com.ultimatefocus.app.ui.drawer
 
@@ -41,9 +43,18 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.core.net.toUri
 import com.ultimatefocus.app.domain.model.AppInfo
-import com.ultimatefocus.app.ui.components.FavoriteContextMenuDialog
+import com.ultimatefocus.app.domain.model.BlockDuration
+import com.ultimatefocus.app.ui.blocked.BlockedAppActivity
+import com.ultimatefocus.app.ui.components.AccessibilityPermissionPrompt
+import com.ultimatefocus.app.ui.components.AppContextMenuDialog
+import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
+import com.ultimatefocus.app.ui.components.NotificationPermissionPrompt
 import com.ultimatefocus.app.ui.drawer.components.AppListItem
 import com.ultimatefocus.app.ui.drawer.components.SearchBar
+import com.ultimatefocus.app.ui.home.BlockPromptStep
+import com.ultimatefocus.app.ui.home.nextBlockPromptStep
+import com.ultimatefocus.app.util.AccessibilityPermission
+import com.ultimatefocus.app.util.NotificationListenerPermission
 
 @Composable
 fun AppDrawerScreen(
@@ -58,7 +69,27 @@ fun AppDrawerScreen(
 
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }
+    var showBlockPicker by remember { mutableStateOf(false) }
+    var pendingBlock by remember {
+        mutableStateOf<Triple<AppInfo, BlockDuration, BlockPromptStep>?>(null)
+    }
     val focusRequester = remember { FocusRequester() }
+    val launchContext = androidx.compose.ui.platform.LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.blockedAttempts.collect { blocked ->
+            val blockedUntilMs = System.currentTimeMillis() + blocked.remainingMs
+            launchContext.startActivity(
+                BlockedAppActivity.intent(
+                    context = launchContext,
+                    packageName = blocked.packageName,
+                    appLabel = blocked.appLabel,
+                    blockedUntilEpochMs = blockedUntilMs,
+                    durationLabel = blocked.durationLabel,
+                ),
+            )
+        }
+    }
 
     LaunchedEffect(autoKeyboard, isActive) {
         if (autoKeyboard && isActive) {
@@ -141,9 +172,14 @@ fun AppDrawerScreen(
 
     if (showContextMenu && selectedApp != null) {
         val context = androidx.compose.ui.platform.LocalContext.current
-        FavoriteContextMenuDialog(
+        AppContextMenuDialog(
             app = selectedApp!!,
+            nowEpochMs = System.currentTimeMillis(),
             onToggleFavorite = { viewModel.toggleFavorite(it) },
+            onBlockApp = {
+                showContextMenu = false
+                showBlockPicker = true
+            },
             onAppInfo = { app ->
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = "package:${app.packageName}".toUri()
@@ -153,5 +189,56 @@ fun AppDrawerScreen(
             },
             onDismiss = { showContextMenu = false },
         )
+    }
+
+    if (showBlockPicker && selectedApp != null) {
+        BlockDurationPickerDialog(
+            appLabel = selectedApp!!.label,
+            onConfirm = { duration ->
+                val app = selectedApp!!
+                val step = nextBlockPromptStep(launchContext, from = BlockPromptStep.Accessibility)
+                if (step == BlockPromptStep.None) {
+                    viewModel.blockApp(app.packageName, duration)
+                } else {
+                    pendingBlock = Triple(app, duration, step)
+                }
+            },
+            onDismiss = {
+                showBlockPicker = false
+                if (pendingBlock == null) selectedApp = null
+            },
+        )
+    }
+
+    val pending = pendingBlock
+    if (pending != null) {
+        when (pending.third) {
+            BlockPromptStep.Accessibility -> AccessibilityPermissionPrompt(
+                appLabel = pending.first.label,
+                onGrantAccess = { AccessibilityPermission.openSettings(launchContext) },
+                onContinueWithout = { /* fall through via onDismiss */ },
+                onDismiss = {
+                    val next = nextBlockPromptStep(launchContext, from = BlockPromptStep.Notification)
+                    if (next == BlockPromptStep.None) {
+                        viewModel.blockApp(pending.first.packageName, pending.second)
+                        pendingBlock = null
+                        selectedApp = null
+                    } else {
+                        pendingBlock = pending.copy(third = next)
+                    }
+                },
+            )
+            BlockPromptStep.Notification -> NotificationPermissionPrompt(
+                appLabel = pending.first.label,
+                onGrantAccess = { NotificationListenerPermission.openSettings(launchContext) },
+                onContinueWithout = { /* fall through via onDismiss */ },
+                onDismiss = {
+                    viewModel.blockApp(pending.first.packageName, pending.second)
+                    pendingBlock = null
+                    selectedApp = null
+                },
+            )
+            BlockPromptStep.None -> Unit
+        }
     }
 }

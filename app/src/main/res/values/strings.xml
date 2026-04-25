@@ -10,4 +10,7 @@
     <string name="no_apps_found">No apps found</string>
     <string name="set_as_default">Set as Default Launcher</string>
     <string name="swipe_up_hint">Swipe up for all apps</string>
+    <string name="notification_listener_label">UltimateFocus — silence blocked apps</string>
+    <string name="accessibility_service_label">UltimateFocus — enforce app blocks</string>
+    <string name="accessibility_service_description">Watches which app is in the foreground and redirects you to the block reminder when you try to open an app you have blocked. No data leaves the device.</string>
 </resources>

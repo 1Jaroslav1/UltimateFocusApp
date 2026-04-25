@@ -10,6 +10,7 @@ import android.content.ComponentName
 import app.cash.turbine.test
 import com.ultimatefocus.app.data.repository.FakeAppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.domain.repository.FakeBlockedAppRepository
 import com.ultimatefocus.app.domain.repository.FakeUserPreferencesSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -42,7 +43,7 @@ class AppDrawerViewModelTest {
         Dispatchers.setMain(testDispatcher)
         fakeRepository = FakeAppRepository()
         fakePreferences = FakeUserPreferencesSource()
-        viewModel = AppDrawerViewModel(fakeRepository, fakePreferences)
+        viewModel = AppDrawerViewModel(fakeRepository, fakePreferences, FakeBlockedAppRepository())
     }
 
     @After

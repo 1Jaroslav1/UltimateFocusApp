@@ -3,7 +3,9 @@
  * Verifies that apps are shown as text labels only (no icons),
  * that the search field is visible and filters the list in real time,
  * and that the context menu appears on long press.
- * Covers: ULT-7
+ * Also covers the blocked-state visual indicator (🔒 + strikethrough) added
+ * with ULT-20.
+ * Covers: ULT-7, ULT-20
  */
 package com.ultimatefocus.app.ui.drawer
 
@@ -130,5 +132,29 @@ class AppDrawerScreenTest {
             }
         }
         composeRule.onNodeWithText("Search apps\u2026").assertIsDisplayed()
+    }
+
+    // ── ULT-20: blocked apps render with 🔒 prefix ──────────────────────────
+
+    @Test
+    fun appListItem_blockedApp_rendersLockPrefix() {
+        val app = makeApp("Instagram").copy(blockedUntilEpochMs = Long.MAX_VALUE)
+        composeRule.setContent {
+            UltimateFocusTheme {
+                AppListItem(appInfo = app, onClick = {}, onLongClick = {})
+            }
+        }
+        composeRule.onNodeWithText("\uD83D\uDD12 Instagram").assertIsDisplayed()
+    }
+
+    @Test
+    fun appListItem_unblockedApp_doesNotRenderLockPrefix() {
+        val app = makeApp("Calendar") // blockedUntilEpochMs = null
+        composeRule.setContent {
+            UltimateFocusTheme {
+                AppListItem(appInfo = app, onClick = {}, onLongClick = {})
+            }
+        }
+        composeRule.onNodeWithText("Calendar").assertIsDisplayed()
     }
 }

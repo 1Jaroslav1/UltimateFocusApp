@@ -2,7 +2,9 @@
  * Composable that renders the user's pinned favorite apps as plain text labels.
  * No icons, thumbnails, or badges — each item is a tappable text string only.
  * Long-pressing an item triggers the context menu callback for management.
- * Covers: ULT-6
+ * Blocked apps (AppInfo.blockedUntilEpochMs != null) get the same 🔒 prefix,
+ * strikethrough, and faded color applied in the drawer (ULT-20).
+ * Covers: ULT-6, ULT-20
  */
 package com.ultimatefocus.app.ui.home.components
 
@@ -22,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.HomeAlignment
@@ -47,12 +50,18 @@ fun FavoritesList(
             .testTag("favorites_list"),
     ) {
         favorites.forEach { app ->
+            val isBlocked = app.blockedUntilEpochMs != null
             Text(
-                text = app.label,
+                text = if (isBlocked) "\uD83D\uDD12 ${app.label}" else app.label,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = if (isBlocked) {
+                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                } else {
+                    MaterialTheme.colorScheme.onBackground
+                },
                 fontWeight = FontWeight.Normal,
                 textAlign = textAlign,
+                textDecoration = if (isBlocked) TextDecoration.LineThrough else TextDecoration.None,
                 modifier = Modifier
                     .fillMaxWidth()
                     .combinedClickable(
