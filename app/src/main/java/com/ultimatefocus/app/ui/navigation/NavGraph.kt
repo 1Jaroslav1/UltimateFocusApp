@@ -5,6 +5,15 @@
  * are pushed on top via standard NavHost navigation with horizontal slide
  * transitions for visual consistency.
  *
+ * Transitions: each pushed route uses the standard "push" pattern — on
+ * forward navigation the outgoing screen slides off to the LEFT while the
+ * incoming screen slides in from the RIGHT (the two halves meet in the
+ * middle, no grey gap). On pop the directions are reversed: the outgoing
+ * screen slides to the right while the returning screen slides in from
+ * the left. The pager destination keeps the NavHost-default None
+ * transitions so pushing on top of it / popping back to it just slides
+ * the pushed screen in or out without disturbing the pager underneath.
+ *
  * Back-press handling:
  *   - On the home pager page (page 0): a BackHandler consumes the back press
  *     and does nothing — the launcher's home is intentionally non-exitable
@@ -90,7 +99,9 @@ fun NavGraph(navController: NavHostController) {
         composable(
             route = Screen.Settings.route,
             enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
-            exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+            exitTransition = { slideOutHorizontally(targetOffsetX = { -it }) },
+            popEnterTransition = { slideInHorizontally(initialOffsetX = { -it }) },
+            popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
             SettingsScreen(
                 onNavigateBack = { navController.popBackStack() },
@@ -105,7 +116,9 @@ fun NavGraph(navController: NavHostController) {
         composable(
             route = Screen.BlockingSchedules.route,
             enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
-            exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+            exitTransition = { slideOutHorizontally(targetOffsetX = { -it }) },
+            popEnterTransition = { slideInHorizontally(initialOffsetX = { -it }) },
+            popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
             BlockingSchedulesListScreen(
                 onNavigateBack = { navController.popBackStack() },
@@ -131,7 +144,9 @@ fun NavGraph(navController: NavHostController) {
                 },
             ),
             enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
-            exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+            exitTransition = { slideOutHorizontally(targetOffsetX = { -it }) },
+            popEnterTransition = { slideInHorizontally(initialOffsetX = { -it }) },
+            popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
             BlockingScheduleEditorScreen(
                 onNavigateBack = { navController.popBackStack() },
