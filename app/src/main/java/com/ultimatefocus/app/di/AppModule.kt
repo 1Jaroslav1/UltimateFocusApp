@@ -7,6 +7,8 @@
  * Database uses fallbackToDestructiveMigration because the app is pre-release
  * MVP — schema bumps (e.g. ULT-20 adding blocked_apps, ULT-24 adding
  * blocking_schedules) wipe prior data.
+ * Also binds AppUsageStatsRepository (UsageStatsManager-backed) so the
+ * schedule editor can sort the app picker by weekly foreground usage.
  * Covers: ULT-5, ULT-16, ULT-17, ULT-18, ULT-20, ULT-24
  */
 package com.ultimatefocus.app.di
@@ -20,9 +22,11 @@ import com.ultimatefocus.app.data.local.dao.FavoriteDao
 import com.ultimatefocus.app.data.preferences.UserPreferencesDataStore
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.data.repository.AppRepositoryImpl
+import com.ultimatefocus.app.data.repository.AppUsageStatsRepositoryImpl
 import com.ultimatefocus.app.data.repository.BlockedAppRepositoryImpl
 import com.ultimatefocus.app.data.repository.BlockingScheduleRepositoryImpl
 import com.ultimatefocus.app.data.system.SystemActionsImpl
+import com.ultimatefocus.app.domain.repository.AppUsageStatsRepository
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import com.ultimatefocus.app.domain.repository.BlockingScheduleRepository
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
@@ -86,6 +90,12 @@ abstract class RepositoryModule {
     abstract fun bindBlockingScheduleRepository(
         impl: BlockingScheduleRepositoryImpl,
     ): BlockingScheduleRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAppUsageStatsRepository(
+        impl: AppUsageStatsRepositoryImpl,
+    ): AppUsageStatsRepository
 
     @Binds
     @Singleton

@@ -12,6 +12,7 @@ import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.ultimatefocus.app.data.repository.FakeAppRepository
 import com.ultimatefocus.app.domain.model.BlockingSchedule
+import com.ultimatefocus.app.domain.repository.FakeAppUsageStatsRepository
 import com.ultimatefocus.app.domain.repository.FakeBlockingScheduleRepository
 import com.ultimatefocus.app.domain.service.FakeClock
 import com.ultimatefocus.app.domain.service.FixedZoneIdProvider
@@ -39,6 +40,7 @@ class BlockingScheduleEditorViewModelTest {
 
     private lateinit var repo: FakeBlockingScheduleRepository
     private lateinit var appRepo: FakeAppRepository
+    private lateinit var usageRepo: FakeAppUsageStatsRepository
     private lateinit var clock: FakeClock
 
     private val zone: ZoneId = ZoneId.of("Europe/Warsaw")
@@ -52,6 +54,7 @@ class BlockingScheduleEditorViewModelTest {
         clock = FakeClock(current = nowMs)
         repo = FakeBlockingScheduleRepository(clock, zoneProvider)
         appRepo = FakeAppRepository()
+        usageRepo = FakeAppUsageStatsRepository()
     }
 
     @After
@@ -63,7 +66,57 @@ class BlockingScheduleEditorViewModelTest {
         val savedState = SavedStateHandle(
             mapOf(Screen.BlockingScheduleEditor.ARG_ID to (id ?: Screen.BlockingScheduleEditor.NEW_ID)),
         )
-        return BlockingScheduleEditorViewModel(savedState, repo, appRepo, clock, zoneProvider)
+        return BlockingScheduleEditorViewModel(savedState, repo, appRepo, usageRepo, clock, zoneProvider)
+    }
+
+    private fun appInfo(pkg: String, label: String) = com.ultimatefocus.app.domain.model.AppInfo(
+        packageName = pkg,
+        label = label,
+        componentName = android.content.ComponentName(pkg, "$pkg.MainActivity"),
+    )
+
+    // ── Picker ordering ─────────────────────────────────────────────────────
+
+    @Test
+    fun pickerItems_sortedByUsageDescending_thenAlphabetically() = runTest {
+        appRepo.setApps(
+            listOf(
+                appInfo("com.b", "Beta"),
+                appInfo("com.a", "Alpha"),
+                appInfo("com.c", "Charlie"),
+                appInfo("com.d", "Delta"),
+            ),
+        )
+        usageRepo = FakeAppUsageStatsRepository(
+            seed = mapOf(
+                "com.a" to 100L,
+                "com.b" to 100L, // same as A → tiebreak by label
+                "com.c" to 50L,
+                // d has no recorded usage → 0L → last
+            ),
+        )
+        val vm = newViewModel()
+        val items = vm.pickerItems.first { it.isNotEmpty() }
+        assertEquals(
+            listOf("com.a", "com.b", "com.c", "com.d"),
+            items.map { it.packageName },
+        )
+    }
+
+    @Test
+    fun pickerItems_fallsBackToAlphabetical_whenUsageStatsUnavailable() = runTest {
+        appRepo.setApps(
+            listOf(
+                appInfo("com.b", "Beta"),
+                appInfo("com.a", "Alpha"),
+                appInfo("com.c", "Charlie"),
+            ),
+        )
+        usageRepo = FakeAppUsageStatsRepository(available = false)
+        val vm = newViewModel()
+        val items = vm.pickerItems.first { it.isNotEmpty() }
+        assertEquals(listOf("com.a", "com.b", "com.c"), items.map { it.packageName })
+        assertTrue(items.all { it.weeklyUsageMillis == 0L })
     }
 
     // ── Create flow ─────────────────────────────────────────────────────────

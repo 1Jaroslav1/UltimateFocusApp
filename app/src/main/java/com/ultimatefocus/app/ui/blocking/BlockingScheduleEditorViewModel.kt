@@ -8,9 +8,12 @@
  *  - effectEvents — one-shot Saved / Deleted / Error signals consumed by
  *    the screen to navigate or surface a snackbar.
  *
- * Reads the installed-apps list from AppRepository so the multi-select
- * sheet shows the same set the rest of the launcher uses (own package
- * already filtered out).
+ * Reads the installed-apps list from AppRepository and joins it with weekly
+ * foreground-usage from AppUsageStatsRepository so the picker can sort by
+ * "most distracting" (descending usage) with alphabetical tiebreak. When
+ * PACKAGE_USAGE_STATS hasn't been granted the usage map is empty and the
+ * sort degrades to alphabetical — the picker still works, just without
+ * the smarts.
  *
  * Covers: ULT-24, ULT-25
  */
@@ -23,6 +26,7 @@ import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.BlockingSchedule
 import com.ultimatefocus.app.domain.model.DayOfWeekMask
+import com.ultimatefocus.app.domain.repository.AppUsageStatsRepository
 import com.ultimatefocus.app.domain.repository.BlockingScheduleDraft
 import com.ultimatefocus.app.domain.repository.BlockingScheduleRepository
 import com.ultimatefocus.app.domain.repository.InvalidBlockingScheduleException
@@ -40,6 +44,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -52,6 +58,7 @@ class BlockingScheduleEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: BlockingScheduleRepository,
     private val appRepository: AppRepository,
+    private val usageStatsRepository: AppUsageStatsRepository,
     private val clock: Clock,
     private val zoneIdProvider: ZoneIdProvider,
 ) : ViewModel() {
@@ -70,6 +77,39 @@ class BlockingScheduleEditorViewModel @Inject constructor(
     val installedApps: StateFlow<List<AppInfo>> =
         appRepository.getInstalledApps()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Fetched once when the editor opens — usage data is stable enough that
+     * re-querying mid-edit isn't worth the cost. Falls back to an empty map
+     * if PACKAGE_USAGE_STATS hasn't been granted.
+     */
+    private val weeklyUsage: StateFlow<Map<String, Long>> =
+        flow { emit(usageStatsRepository.weeklyUsageMillis()) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * All installed apps decorated with weekly usage and sorted by
+     * (usage desc, label asc). The screen takes the first 15 for the
+     * inline picker and uses the full list as the "Browse all" source.
+     */
+    val pickerItems: StateFlow<List<AppPickerItem>> =
+        combine(installedApps, weeklyUsage) { apps, usage ->
+            apps
+                .map { app ->
+                    AppPickerItem(
+                        packageName = app.packageName,
+                        label = app.label,
+                        weeklyUsageMillis = usage[app.packageName] ?: 0L,
+                    )
+                }
+                .sortedWith(
+                    compareByDescending<AppPickerItem> { it.weeklyUsageMillis }
+                        .thenBy { it.label.lowercase() },
+                )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val usageStatsAvailable: Boolean
+        get() = usageStatsRepository.isAvailable()
 
     init {
         if (isEditMode) loadExisting()
@@ -224,6 +264,17 @@ data class BlockingScheduleEditorUiState(
     val canDelete: Boolean
         get() = isEditMode && !isCurrentlyActive
 }
+
+/**
+ * Display row for the schedule editor's app picker. weeklyUsageMillis is the
+ * trailing-7-day total time-in-foreground for [packageName]; 0 means either
+ * no recorded usage or no permission to read usage stats.
+ */
+data class AppPickerItem(
+    val packageName: String,
+    val label: String,
+    val weeklyUsageMillis: Long,
+)
 
 sealed interface EditorEvent {
     data object Saved : EditorEvent

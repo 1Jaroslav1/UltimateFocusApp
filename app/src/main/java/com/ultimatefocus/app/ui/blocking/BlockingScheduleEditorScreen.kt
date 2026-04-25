@@ -9,7 +9,9 @@
  *  - Start time row (Material3 TimePicker dialog)
  *  - End time row
  *  - DayChipRow (7 day filter chips)
- *  - "Select apps (N selected)" row → AppMultiSelectSheet
+ *  - Apps picker: inline top-15 by weekly usage (currently-selected apps
+ *    pinned to the front so the editor's state is always glanceable);
+ *    "Browse all apps…" → AppBrowseSheet with filter input
  *  - Save button (and Delete in edit mode)
  *  - Helper subtitle when isCurrentlyActive flips Save/Delete to disabled.
  *
@@ -59,18 +61,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.ultimatefocus.app.ui.blocking.components.AppMultiSelectSheet
+import com.ultimatefocus.app.ui.blocking.components.AppBrowseSheet
+import com.ultimatefocus.app.ui.blocking.components.AppPickerRow
 import com.ultimatefocus.app.ui.blocking.components.DayChipRow
 import com.ultimatefocus.app.ui.blocking.components.DeleteScheduleConfirmDialog
+import com.ultimatefocus.app.util.UsageStatsPermission
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
 private val TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private const val INLINE_PICKER_LIMIT = 15
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,8 +85,9 @@ fun BlockingScheduleEditorScreen(
     viewModel: BlockingScheduleEditorViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val installedApps by viewModel.installedApps.collectAsStateWithLifecycle()
+    val pickerItems by viewModel.pickerItems.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -99,6 +106,10 @@ fun BlockingScheduleEditorScreen(
     var showEndPicker by remember { mutableStateOf(false) }
     var showAppSheet by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    val inlineItems = remember(pickerItems, uiState.packageNames) {
+        buildInlinePickerList(pickerItems, uiState.packageNames, INLINE_PICKER_LIMIT)
+    }
 
     Column(
         modifier = Modifier
@@ -178,21 +189,40 @@ fun BlockingScheduleEditorScreen(
         }
 
         SectionHeader("Apps")
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showAppSheet = true }
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-                .testTag("schedule_apps_row"),
-        ) {
-            Text(
-                text = if (uiState.packageNames.isEmpty()) "Select apps"
-                else "${uiState.packageNames.size} selected",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+        if (!viewModel.usageStatsAvailable) {
+            UsageStatsPermissionRow(
+                onClick = { UsageStatsPermission.openSettings(context) },
             )
         }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+                .testTag("schedule_apps_inline_list"),
+        ) {
+            inlineItems.forEach { item ->
+                AppPickerRow(
+                    item = item,
+                    isSelected = item.packageName in uiState.packageNames,
+                    onToggle = viewModel::togglePackage,
+                )
+            }
+        }
+        TextButton(
+            onClick = { showAppSheet = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .testTag("schedule_apps_browse_button"),
+        ) {
+            Text(text = "Browse all apps…")
+        }
+        Text(
+            text = "${uiState.packageNames.size} app(s) selected",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+        )
         if (uiState.appsError) {
             Text(
                 text = "Pick at least one app.",
@@ -273,8 +303,8 @@ fun BlockingScheduleEditorScreen(
         )
     }
     if (showAppSheet) {
-        AppMultiSelectSheet(
-            apps = installedApps,
+        AppBrowseSheet(
+            items = pickerItems,
             selected = uiState.packageNames,
             onToggle = viewModel::togglePackage,
             onDismiss = { showAppSheet = false },
@@ -290,6 +320,26 @@ fun BlockingScheduleEditorScreen(
             onDismiss = { showDeleteConfirm = false },
         )
     }
+}
+
+/**
+ * Returns at most [limit] apps for the inline picker. Currently-selected
+ * apps are pinned to the front (so the editor's selection state is always
+ * glanceable, including selected apps that fall outside the top-by-usage
+ * window). Remaining slots are filled with the top non-selected apps.
+ *
+ * Both segments preserve the (usage desc, label asc) order the ViewModel
+ * already produced — selected apps don't get re-sorted relative to each
+ * other, which keeps the layout stable when the user toggles a row.
+ */
+internal fun buildInlinePickerList(
+    items: List<AppPickerItem>,
+    selected: Set<String>,
+    limit: Int,
+): List<AppPickerItem> {
+    val (selectedItems, unselectedItems) = items.partition { it.packageName in selected }
+    val freeSlots = (limit - selectedItems.size).coerceAtLeast(0)
+    return selectedItems + unselectedItems.take(freeSlots)
 }
 
 @Composable
@@ -332,6 +382,24 @@ private fun TimeRow(
     }
 }
 
+@Composable
+private fun UsageStatsPermissionRow(onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 8.dp)
+            .testTag("schedule_apps_usage_permission_row"),
+    ) {
+        Text(
+            text = "Grant usage access to sort apps by how much you use them.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimePickerDialog(
@@ -359,3 +427,4 @@ private fun TimePickerDialog(
         text = { TimePicker(state = state) },
     )
 }
+

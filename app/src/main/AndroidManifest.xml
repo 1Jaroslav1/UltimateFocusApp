@@ -4,6 +4,12 @@
 
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- ULT-24: required so the schedule editor can sort the app picker by
+         weekly usage time. Granted by the user in System Settings (not at
+         runtime); the picker degrades to alphabetical sort if missing. -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:name=".UltimateFocusApp"
