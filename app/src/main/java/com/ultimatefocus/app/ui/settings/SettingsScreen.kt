@@ -2,9 +2,10 @@
  * Settings screen. Exposes toggles for dark theme and auto-keyboard on app drawer
  * entry, a shortcut to the system launcher selector, and a Gestures section
  * controlling the swipe-up web-search provider (ULT-16) and the
- * two-finger-double-tap-to-lock preference (ULT-18). Provides the entry
- * point to the recurring blocking-schedule list (ULT-24).
- * Covers: ULT-8, ULT-16, ULT-18, ULT-24
+ * two-finger-double-tap-to-lock preference (ULT-18). Provides entry points to
+ * the recurring blocking-schedule list (ULT-24) and the Manage Tags screen
+ * (ULT-72).
+ * Covers: ULT-8, ULT-16, ULT-18, ULT-24, ULT-72
  */
 package com.ultimatefocus.app.ui.settings
 
@@ -57,6 +58,7 @@ import com.ultimatefocus.app.domain.service.WebSearchProvider
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToBlockingSchedules: () -> Unit = {},
+    onOpenManageTags: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -203,6 +205,17 @@ fun SettingsScreen(
             subtitle = "Automatically block selected apps during recurring time windows.",
             onClick = onNavigateToBlockingSchedules,
             modifier = Modifier.testTag("blocking_schedules_row"),
+        )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
+
+        SectionHeader("Tags")
+
+        SettingsRow(
+            title = "Manage tags",
+            subtitle = "Create up to 10 color-coded tags to categorize your apps.",
+            onClick = onOpenManageTags,
+            modifier = Modifier.testTag("manage_tags_settings_row"),
         )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
