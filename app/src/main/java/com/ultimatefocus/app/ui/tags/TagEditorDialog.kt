@@ -119,20 +119,30 @@ fun TagEditorDialog(
 
         HorizontalDivider(color = Color.White, thickness = 1.dp)
 
-        DefaultModalAction(
-            text = "Save",
-            onClick = {
-                val color = selectedColor ?: return@DefaultModalAction
-                onSave(name.trim(), color)
-            },
-            enabled = canSave,
-            modifier = Modifier.testTag("tag_editor_save_button"),
-        )
-        DefaultModalAction(
-            text = "Cancel",
-            onClick = onDismiss,
-            modifier = Modifier.testTag("tag_editor_cancel_button"),
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+        ) {
+            DefaultModalAction(
+                text = "Cancel",
+                onClick = onDismiss,
+                fillWidth = false,
+                modifier = Modifier.testTag("tag_editor_cancel_button"),
+            )
+            DefaultModalAction(
+                text = "Save",
+                onClick = {
+                    val color = selectedColor ?: return@DefaultModalAction
+                    onSave(name.trim(), color)
+                },
+                enabled = canSave,
+                fillWidth = false,
+                modifier = Modifier.testTag("tag_editor_save_button"),
+            )
+        }
     }
 }
 

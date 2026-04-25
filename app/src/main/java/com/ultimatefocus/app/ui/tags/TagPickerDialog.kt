@@ -1,11 +1,23 @@
 /**
- * Modal that lets the user toggle tags on/off for one or more apps. In bulk
- * mode (>1 package) each row uses a tri-state checkbox: ✓ when all selected
- * apps already have the tag, ⊠ (intermediate) when some do, blank when none
- * — tapping cycles AllAssigned → NoneAssigned → AllAssigned.
- * Empty state ("No tags yet") shows a "Manage tags" button that hops to
+ * Modal that lets the user toggle tags on/off for one or more apps,
+ * rendered in the launcher's default app modal style (black surface,
+ * 1dp white border, in-line header) so it matches the long-press app
+ * menu users already know.
+ *
+ * Selection state is expressed text-only (no Material checkboxes) so
+ * the dark theme stays clean:
+ *   ✓   AllAssigned     (every app in the selection has the tag)
+ *   ◐   SomeAssigned    (bulk mode only; some apps have it, some don't)
+ *   ·   NoneAssigned    (no app in the selection has the tag)
+ *
+ * Tapping a row delegates to TagPickerViewModel.toggle which cycles:
+ *   - single-app: assigned ↔ unassigned
+ *   - bulk: AllAssigned → unassign-all, otherwise → assign-all
+ *
+ * Empty state ("No tags yet") shows a "Manage tags" action that hops to
  * the ManageTagsScreen so users without tags can create one without
  * leaving the flow manually.
+ *
  * Saves immediately — no Save button. Dismiss via outside tap or "Done".
  * Covers: ULT-73
  */
@@ -20,29 +32,28 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.ultimatefocus.app.domain.repository.TagRepository
+import com.ultimatefocus.app.ui.components.DefaultAppModal
+import com.ultimatefocus.app.ui.components.DefaultModalAction
 import dagger.hilt.android.EntryPointAccessors
 
 /**
@@ -91,46 +102,50 @@ fun TagPickerDialogContent(
     onManageTags: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    val isBulk = state.packagesUnderEdit.size > 1
+    val header = if (isBulk) "Tags for ${state.packagesUnderEdit.size} apps" else "Tags"
+
+    DefaultAppModal(
+        header = header,
+        onDismiss = onDismiss,
         modifier = Modifier.testTag("tag_picker_dialog"),
-        title = {
-            val title = if (state.packagesUnderEdit.size > 1) {
-                "Tags for ${state.packagesUnderEdit.size} apps"
-            } else {
-                "Tags"
-            }
-            Text(text = title)
-        },
-        text = {
-            when {
-                state.isLoading -> Text(text = "Loading tags…")
-                state.items.isEmpty() -> EmptyTagsHint(onManageTags = onManageTags)
-                else -> LazyColumn(
+    ) {
+        when {
+            state.isLoading -> {
+                Box(
+                    contentAlignment = Alignment.CenterStart,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightSafe()
-                        .testTag("tag_picker_list"),
+                        .padding(horizontal = 12.dp, vertical = 16.dp),
                 ) {
-                    items(items = state.items, key = { it.tag.id }) { item ->
-                        TagPickerRow(
-                            item = item,
-                            isBulk = state.packagesUnderEdit.size > 1,
-                            onClick = { onToggle(item) },
-                        )
-                    }
+                    Text(text = "Loading tags…", color = Color.White, fontSize = 14.sp)
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.testTag("tag_picker_done_button"),
+            state.items.isEmpty() -> EmptyTagsHint(onManageTags = onManageTags)
+            else -> LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .testTag("tag_picker_list"),
             ) {
-                Text(text = "Done")
+                items(items = state.items, key = { it.tag.id }) { item ->
+                    TagPickerRow(
+                        item = item,
+                        isBulk = isBulk,
+                        onClick = { onToggle(item) },
+                    )
+                }
             }
-        },
-    )
+        }
+
+        HorizontalDivider(color = Color.White, thickness = 1.dp)
+
+        DefaultModalAction(
+            text = "Done",
+            onClick = onDismiss,
+            modifier = Modifier.testTag("tag_picker_done_button"),
+        )
+    }
 }
 
 @Composable
@@ -139,34 +154,28 @@ private fun TagPickerRow(
     isBulk: Boolean,
     onClick: () -> Unit,
 ) {
+    val statePrefix = when (item.state) {
+        TagAssignmentState.AllAssigned -> "✓ "
+        TagAssignmentState.SomeAssigned -> if (isBulk) "◐ " else "  "
+        TagAssignmentState.NoneAssigned -> "  "
+    }
+    val labelColor = if (item.disabled) Color.Gray else Color.White
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = !item.disabled, onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
             .testTag("tag_picker_row_${item.tag.id}"),
     ) {
-        if (isBulk) {
-            TriStateCheckbox(
-                state = when (item.state) {
-                    TagAssignmentState.AllAssigned -> ToggleableState.On
-                    TagAssignmentState.NoneAssigned -> ToggleableState.Off
-                    TagAssignmentState.SomeAssigned -> ToggleableState.Indeterminate
-                },
-                onClick = onClick,
-                enabled = !item.disabled,
-                modifier = Modifier.testTag("tag_picker_tristate_${item.tag.id}"),
-            )
-        } else {
-            Checkbox(
-                checked = item.state == TagAssignmentState.AllAssigned,
-                onCheckedChange = { onClick() },
-                enabled = !item.disabled,
-                modifier = Modifier.testTag("tag_picker_check_${item.tag.id}"),
-            )
-        }
-        Spacer(modifier = Modifier.size(8.dp))
+        Text(
+            text = statePrefix,
+            color = labelColor,
+            fontSize = 14.sp,
+            modifier = Modifier.testTag("tag_picker_state_${item.tag.id}"),
+        )
+        Spacer(modifier = Modifier.size(6.dp))
         Box(
             modifier = Modifier
                 .size(12.dp)
@@ -176,18 +185,14 @@ private fun TagPickerRow(
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = item.tag.name,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (item.disabled) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.onBackground
-                },
+                color = labelColor,
+                fontSize = 14.sp,
             )
             if (item.disabled) {
                 Text(
                     text = "App already has the maximum 5 tags.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color.Gray,
+                    fontSize = 11.sp,
                     modifier = Modifier.testTag("tag_picker_disabled_message_${item.tag.id}"),
                 )
             }
@@ -202,29 +207,26 @@ private fun EmptyTagsHint(onManageTags: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 16.dp)
+            .padding(horizontal = 12.dp, vertical = 16.dp)
             .testTag("tag_picker_empty_state"),
     ) {
         Text(
             text = "No tags yet",
-            style = MaterialTheme.typography.titleMedium,
+            color = Color.White,
+            fontSize = 14.sp,
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = "Create a tag to start categorizing your apps.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = Color.Gray,
+            fontSize = 12.sp,
         )
         Spacer(modifier = Modifier.height(8.dp))
-        TextButton(
+        DefaultModalAction(
+            text = "Manage tags",
             onClick = onManageTags,
+            fillWidth = false,
             modifier = Modifier.testTag("tag_picker_manage_tags_button"),
-        ) {
-            Text(text = "Manage tags")
-        }
+        )
     }
 }
-
-private fun Modifier.heightSafe(): Modifier = this.then(
-    Modifier.height(360.dp),
-)

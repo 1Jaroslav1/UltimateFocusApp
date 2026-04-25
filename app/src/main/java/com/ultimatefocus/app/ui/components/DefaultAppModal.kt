@@ -98,6 +98,12 @@ fun DefaultAppModal(
 /**
  * Tappable text row used inside [DefaultAppModal]. Press gives a gray
  * background flash; disabled rows render in faded gray and ignore taps.
+ *
+ * `fillWidth` controls layout: `true` (default) fills the parent width
+ * and left-aligns the text — the menu-row pattern from AppContextMenuDialog.
+ * `false` shrinks to natural width — used when several actions live in a
+ * horizontal Row (e.g. Cancel + Save side-by-side at the bottom of an
+ * editor).
  */
 @Composable
 fun DefaultModalAction(
@@ -105,6 +111,7 @@ fun DefaultModalAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    fillWidth: Boolean = true,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed = interaction.collectIsPressedAsState()
@@ -116,13 +123,13 @@ fun DefaultModalAction(
             containerColor = if (pressed.value) Color.Gray else Color.Transparent,
         ),
         shape = RoundedCornerShape(0.dp),
-        modifier = modifier.fillMaxWidth(),
+        modifier = if (fillWidth) modifier.fillMaxWidth() else modifier,
     ) {
         Text(
             text = text,
             fontSize = 14.sp,
             color = if (enabled) Color.White else Color.Gray,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier,
         )
     }
 }

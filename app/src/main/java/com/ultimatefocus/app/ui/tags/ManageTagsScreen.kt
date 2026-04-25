@@ -354,12 +354,15 @@ private fun TagRowActionMenu(
         onDismiss = onDismiss,
         modifier = Modifier.testTag("tag_row_menu"),
     ) {
+        // NOTE: callers transition the parent's single TagDialogState to a
+        // new dialog inside onEdit / onBlock / onDelete. Do NOT also fire
+        // onDismiss here — that would write Hidden right after the new
+        // state and the next dialog would never appear (the original
+        // "Edit button does nothing" bug). Outside-tap still hits onDismiss
+        // via DefaultAppModal's onDismissRequest.
         DefaultModalAction(
             text = "Edit",
-            onClick = {
-                onEdit()
-                onDismiss()
-            },
+            onClick = onEdit,
             modifier = Modifier.testTag("tag_row_menu_edit"),
         )
 
@@ -375,16 +378,12 @@ private fun TagRowActionMenu(
         } else {
             DefaultModalAction(
                 text = "Block by tag…",
-                onClick = {
-                    onBlock()
-                },
+                onClick = onBlock,
                 modifier = Modifier.testTag("tag_row_menu_block"),
             )
             DefaultModalAction(
                 text = "Delete",
-                onClick = {
-                    onDelete()
-                },
+                onClick = onDelete,
                 modifier = Modifier.testTag("tag_row_menu_delete"),
             )
         }

@@ -2,13 +2,17 @@
  * Compose UI tests for the stateless TagPickerDialogContent. Constructs a
  * TagPickerUiState manually so each scenario can be exercised without Hilt
  * or Room. Verifies: empty-state hint with "Manage tags" shortcut, single-app
- * checkbox renders, bulk tri-state renders for SomeAssigned, disabled rows
- * show explanatory message, Done button fires onDismiss.
+ * row tap fires the toggle, bulk row renders the SomeAssigned ◐ prefix,
+ * disabled rows show the explanatory message, and the Done button fires
+ * onDismiss. Selection state is asserted via the `tag_picker_state_<id>`
+ * tag's text content (✓ / ◐ / blank), now that the modal uses the dark
+ * default-modal style instead of Material checkboxes.
  * Covers: ULT-73
  */
 package com.ultimatefocus.app.ui.tags
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -52,7 +56,7 @@ class TagPickerDialogContentTest {
     }
 
     @Test
-    fun single_app_shows_simple_checkboxes_and_emits_toggle() {
+    fun single_app_row_emits_toggle_on_tap() {
         val tag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
         var toggled: TagPickerItem? = null
         composeRule.setContent {
@@ -71,13 +75,34 @@ class TagPickerDialogContentTest {
                 )
             }
         }
-        composeRule.onNodeWithTag("tag_picker_check_${tag.id}").assertIsDisplayed()
-        composeRule.onNodeWithTag("tag_picker_check_${tag.id}").performClick()
+        composeRule.onNodeWithTag("tag_picker_row_${tag.id}").performClick()
         assertEquals(tag.id, toggled?.tag?.id)
     }
 
     @Test
-    fun bulk_mode_renders_tri_state_checkboxes() {
+    fun assigned_row_renders_check_prefix() {
+        val tag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
+        composeRule.setContent {
+            UltimateFocusTheme {
+                TagPickerDialogContent(
+                    state = TagPickerUiState(
+                        items = listOf(
+                            TagPickerItem(tag = tag, state = TagAssignmentState.AllAssigned, disabled = false),
+                        ),
+                        packagesUnderEdit = listOf("com.app"),
+                        isLoading = false,
+                    ),
+                    onToggle = {},
+                    onManageTags = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tag_picker_state_${tag.id}").assertTextEquals("✓ ")
+    }
+
+    @Test
+    fun bulk_mode_some_assigned_renders_partial_prefix() {
         val tag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
         composeRule.setContent {
             UltimateFocusTheme {
@@ -95,7 +120,7 @@ class TagPickerDialogContentTest {
                 )
             }
         }
-        composeRule.onNodeWithTag("tag_picker_tristate_${tag.id}").assertIsDisplayed()
+        composeRule.onNodeWithTag("tag_picker_state_${tag.id}").assertTextEquals("◐ ")
     }
 
     @Test
