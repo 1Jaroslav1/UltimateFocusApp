@@ -3,10 +3,19 @@
  * Home and Drawer live inside a HorizontalPager for smooth, finger-following
  * swipe transitions. Settings, BlockingSchedules, and BlockingScheduleEditor
  * are pushed on top via standard NavHost navigation with horizontal slide
- * transitions for visual consistency. Each pushed route is wrapped in
- * SwipeBackContainer so a left-edge swipe-right pops the back stack — the
- * default interactive-back gesture for any future pushed screens.
- * Covers: ULT-5, ULT-6, ULT-7, ULT-8, ULT-24, ULT-25
+ * transitions for visual consistency.
+ *
+ * Back-press handling:
+ *   - On the home pager page (page 0): a BackHandler consumes the back press
+ *     and does nothing — the launcher's home is intentionally non-exitable
+ *     since it IS the device home screen.
+ *   - On the drawer pager page (page 1): a BackHandler animates the pager
+ *     back to home.
+ *   - On any pushed route (Settings / BlockingSchedules / Editor): NavHost's
+ *     own BackHandler pops the back stack, so the OS edge-swipe-back gesture
+ *     navigates back exactly like in other Android apps.
+ *
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-8, ULT-23, ULT-24, ULT-25
  */
 package com.ultimatefocus.app.ui.navigation
 
@@ -28,7 +37,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.ultimatefocus.app.ui.blocking.BlockingScheduleEditorScreen
 import com.ultimatefocus.app.ui.blocking.BlockingSchedulesListScreen
-import com.ultimatefocus.app.ui.components.SwipeBackContainer
 import com.ultimatefocus.app.ui.drawer.AppDrawerScreen
 import com.ultimatefocus.app.ui.home.HomeScreen
 import com.ultimatefocus.app.ui.settings.SettingsScreen
@@ -46,6 +54,9 @@ fun NavGraph(navController: NavHostController) {
         exitTransition = { ExitTransition.None },
     ) {
         composable(route = "pager") {
+            // Home page (0) consumes back so the launcher does not finish.
+            BackHandler(enabled = pagerState.currentPage == 0) { /* no-op */ }
+            // Drawer page (1) routes back to home.
             BackHandler(enabled = pagerState.currentPage == 1) {
                 coroutineScope.launch { pagerState.animateScrollToPage(0) }
             }
@@ -81,16 +92,14 @@ fun NavGraph(navController: NavHostController) {
             enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
             exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
-            SwipeBackContainer(onBack = { navController.popBackStack() }) {
-                SettingsScreen(
-                    onNavigateBack = { navController.popBackStack() },
-                    onNavigateToBlockingSchedules = {
-                        navController.navigate(Screen.BlockingSchedules.route) {
-                            launchSingleTop = true
-                        }
-                    },
-                )
-            }
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToBlockingSchedules = {
+                    navController.navigate(Screen.BlockingSchedules.route) {
+                        launchSingleTop = true
+                    }
+                },
+            )
         }
 
         composable(
@@ -98,21 +107,19 @@ fun NavGraph(navController: NavHostController) {
             enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
             exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
-            SwipeBackContainer(onBack = { navController.popBackStack() }) {
-                BlockingSchedulesListScreen(
-                    onNavigateBack = { navController.popBackStack() },
-                    onAddSchedule = {
-                        navController.navigate(
-                            Screen.BlockingScheduleEditor.routeFor(null),
-                        ) { launchSingleTop = true }
-                    },
-                    onEditSchedule = { id ->
-                        navController.navigate(
-                            Screen.BlockingScheduleEditor.routeFor(id),
-                        ) { launchSingleTop = true }
-                    },
-                )
-            }
+            BlockingSchedulesListScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onAddSchedule = {
+                    navController.navigate(
+                        Screen.BlockingScheduleEditor.routeFor(null),
+                    ) { launchSingleTop = true }
+                },
+                onEditSchedule = { id ->
+                    navController.navigate(
+                        Screen.BlockingScheduleEditor.routeFor(id),
+                    ) { launchSingleTop = true }
+                },
+            )
         }
 
         composable(
@@ -126,11 +133,9 @@ fun NavGraph(navController: NavHostController) {
             enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
             exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
-            SwipeBackContainer(onBack = { navController.popBackStack() }) {
-                BlockingScheduleEditorScreen(
-                    onNavigateBack = { navController.popBackStack() },
-                )
-            }
+            BlockingScheduleEditorScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
         }
     }
 }

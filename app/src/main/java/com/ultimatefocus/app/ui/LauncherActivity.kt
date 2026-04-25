@@ -4,7 +4,16 @@
  * presents it as the device home screen.
  * On first launch, prompts the user to set this app as the default launcher
  * via RoleManager (API 29+).
- * Covers: ULT-5
+ *
+ * Back-press handling is left to OnBackPressedDispatcher (NavHost registers
+ * its own pop callback there, so the OS edge-swipe-back gesture pops the
+ * NavHost stack like any other Android app). The "home page is not
+ * exitable" rule is enforced by a BackHandler in NavGraph that's enabled
+ * only on the pager's home page — not by overriding onBackPressed() here,
+ * which would short-circuit the dispatcher and break navigation pop on the
+ * pushed Settings / Blocking schedules / editor screens.
+ *
+ * Covers: ULT-5, ULT-23 (back-press iteration)
  */
 package com.ultimatefocus.app.ui
 
@@ -70,10 +79,5 @@ class LauncherActivity : ComponentActivity() {
                 // RoleManager may not be available on all devices/emulators
             }
         }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        // Home screen — back press intentionally ignored
     }
 }
