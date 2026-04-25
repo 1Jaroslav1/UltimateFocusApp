@@ -3,9 +3,13 @@
  * tag" CTA at the top. Tapping a tag row opens TagEditorDialog in edit mode.
  * Long-pressing a row opens an action menu offering Edit, Delete, and
  * Block-by-Tag (ULT-75). When a tag has an active block, its row shows a
- * lock badge with the remaining duration.
+ * lock badge with the remaining duration; the long-press menu hides both
+ * "Block by tag…" (already blocked) and "Delete" (cannot delete a tag while
+ * its block is active — ULT-26 follow-up #3).
  * The Create CTA is disabled when 10 tags exist and shows a sub-line
  * explaining the limit. Empty state encourages first-tag creation.
+ * All dialogs render in the launcher's default app modal style for
+ * visual consistency with the long-press app menu.
  * Covers: ULT-72, ULT-75
  */
 package com.ultimatefocus.app.ui.tags
@@ -31,13 +35,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,15 +50,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.MAX_TAGS
 import com.ultimatefocus.app.domain.model.Tag
 import com.ultimatefocus.app.domain.repository.TagOperationError
+import com.ultimatefocus.app.ui.components.DefaultAppModal
+import com.ultimatefocus.app.ui.components.DefaultModalAction
+import com.ultimatefocus.app.ui.components.DefaultModalStatusRow
 import com.ultimatefocus.app.util.BlockedTimeFormatter
 import kotlinx.coroutines.launch
 
@@ -164,8 +171,8 @@ fun ManageTagsScreen(
                 },
                 onBlock = {
                     scope.launch {
-                        val packages = blockTagViewModel.preview(s.tag.id)
-                        dialogState = TagDialogState.BlockPreview(s.tag, packages)
+                        val apps = blockTagViewModel.preview(s.tag.id)
+                        dialogState = TagDialogState.BlockPreview(s.tag, apps)
                     }
                 },
                 onDismiss = { dialogState = TagDialogState.Hidden },
@@ -185,7 +192,7 @@ fun ManageTagsScreen(
         is TagDialogState.BlockPreview -> {
             BlockTagPreviewDialog(
                 tag = s.tag,
-                affectedPackages = s.affectedPackages,
+                affectedApps = s.affectedApps,
                 onConfirm = { duration: BlockDuration ->
                     blockTagViewModel.blockTag(s.tag.id, duration)
                     dialogState = TagDialogState.Hidden
@@ -196,20 +203,26 @@ fun ManageTagsScreen(
     }
 
     errorMessage?.let { msg ->
-        AlertDialog(
-            onDismissRequest = { errorMessage = null },
+        DefaultAppModal(
+            header = "Couldn't save",
+            onDismiss = { errorMessage = null },
             modifier = Modifier.testTag("tag_error_dialog"),
-            title = { Text("Couldn't save") },
-            text = { Text(msg) },
-            confirmButton = {
-                TextButton(
-                    onClick = { errorMessage = null },
-                    modifier = Modifier.testTag("tag_error_dismiss_button"),
-                ) {
-                    Text("OK")
-                }
-            },
-        )
+        ) {
+            Box(
+                contentAlignment = Alignment.CenterStart,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+            ) {
+                Text(text = msg, fontSize = 14.sp, color = Color.White)
+            }
+            HorizontalDivider(color = Color.White, thickness = 1.dp)
+            DefaultModalAction(
+                text = "OK",
+                onClick = { errorMessage = null },
+                modifier = Modifier.testTag("tag_error_dismiss_button"),
+            )
+        }
     }
 }
 
@@ -315,7 +328,7 @@ private sealed class TagDialogState {
     data class Editor(val existing: Tag?) : TagDialogState()
     data class RowMenu(val tag: Tag) : TagDialogState()
     data class DeleteConfirm(val tag: Tag, val affectedAppCount: Int) : TagDialogState()
-    data class BlockPreview(val tag: Tag, val affectedPackages: List<String>) : TagDialogState()
+    data class BlockPreview(val tag: Tag, val affectedApps: List<BlockTagPreviewApp>) : TagDialogState()
 }
 
 private fun TagOperationError.toUiMessage(): String = when (this) {
@@ -323,6 +336,7 @@ private fun TagOperationError.toUiMessage(): String = when (this) {
     TagOperationError.ColorAlreadyUsed -> "That color is already in use by another tag."
     TagOperationError.AppTagLimitReached -> "App already has the maximum 5 tags."
     TagOperationError.TagNotFound -> "That tag no longer exists."
+    TagOperationError.TagCurrentlyBlocked -> "Cannot delete a tag while its block is active."
     is TagOperationError.NameBlank -> "Tag name cannot be blank."
 }
 
@@ -335,43 +349,44 @@ private fun TagRowActionMenu(
     onBlock: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    DefaultAppModal(
+        header = tag.name,
+        onDismiss = onDismiss,
         modifier = Modifier.testTag("tag_row_menu"),
-        title = { Text(text = tag.name) },
-        text = {
-            Text(
-                text = if (isBlocked) {
-                    "This tag is currently blocking its apps."
-                } else {
-                    "Choose an action."
-                },
+    ) {
+        DefaultModalAction(
+            text = "Edit",
+            onClick = {
+                onEdit()
+                onDismiss()
+            },
+            modifier = Modifier.testTag("tag_row_menu_edit"),
+        )
+
+        if (isBlocked) {
+            // Read-only status row mirrors the AppContextMenuDialog "Blocked —
+            // X remaining" pattern. Hides both Block-by-tag (already in
+            // effect) and Delete (cannot delete a tag whose block is active
+            // — repository enforces the same rule as a safety net).
+            DefaultModalStatusRow(
+                text = "Blocked — cannot delete or re-block",
+                modifier = Modifier.testTag("tag_row_menu_blocked_status"),
             )
-        },
-        confirmButton = {
-            Column {
-                TextButton(
-                    onClick = {
-                        onEdit()
-                        onDismiss()
-                    },
-                    modifier = Modifier.testTag("tag_row_menu_edit"),
-                ) { Text(text = "Edit") }
-                if (!isBlocked) {
-                    TextButton(
-                        onClick = {
-                            onBlock()
-                        },
-                        modifier = Modifier.testTag("tag_row_menu_block"),
-                    ) { Text(text = "Block by tag…") }
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDelete,
+        } else {
+            DefaultModalAction(
+                text = "Block by tag…",
+                onClick = {
+                    onBlock()
+                },
+                modifier = Modifier.testTag("tag_row_menu_block"),
+            )
+            DefaultModalAction(
+                text = "Delete",
+                onClick = {
+                    onDelete()
+                },
                 modifier = Modifier.testTag("tag_row_menu_delete"),
-            ) { Text(text = "Delete") }
-        },
-    )
+            )
+        }
+    }
 }

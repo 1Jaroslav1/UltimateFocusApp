@@ -1,10 +1,19 @@
 /**
- * Confirmation step shown before "Block by tag" commits. Displays the
- * tag name with its colored dot, a count of affected apps and the apps'
- * package names, and lets the user pick a BlockDuration. Choosing a
- * duration commits the block and dismisses the dialog. Mirrors the
- * "warning" tone of the standard BlockDurationPickerDialog used for
- * single-app blocks.
+ * Confirmation step shown before "Block by tag" commits. Rendered in the
+ * launcher's default app modal style (black surface, white border, in-line
+ * header) for visual consistency with the long-press app menu.
+ *
+ * Displays the tag name in the header (with the tag's colored dot) and a
+ * scrollable list of the affected apps by their human-readable labels —
+ * "Telegram" rather than "org.telegram.messenger". Falls back to packageName
+ * if a label could not be resolved (e.g. an app uninstalled between the
+ * preview lookup and dialog render).
+ *
+ * Eight BlockDuration buttons live below in a FlowRow; choosing one commits
+ * the block and dismisses. Disabled when there are no apps to block.
+ *
+ * Mirrors the "warning" tone of the standard BlockDurationPickerDialog used
+ * for single-app blocks.
  * Covers: ULT-75
  */
 package com.ultimatefocus.app.ui.tags
@@ -23,30 +32,36 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.Tag
+import com.ultimatefocus.app.ui.components.DefaultAppModal
+import com.ultimatefocus.app.ui.components.DefaultModalAction
 
 @Composable
 fun BlockTagPreviewDialog(
     tag: Tag,
-    affectedPackages: List<String>,
+    affectedApps: List<BlockTagPreviewApp>,
     onConfirm: (BlockDuration) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    DefaultAppModal(
+        header = "Block tag '${tag.name}'",
+        onDismiss = onDismiss,
         modifier = Modifier.testTag("block_tag_preview_dialog"),
-        title = {
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -54,71 +69,77 @@ fun BlockTagPreviewDialog(
                         .background(color = tag.color.toComposeColor(), shape = CircleShape),
                 )
                 Spacer(modifier = Modifier.size(8.dp))
-                Text(text = "Block tag '${tag.name}'")
-            }
-        },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                val countLabel = when (affectedPackages.size) {
+                val countLabel = when (affectedApps.size) {
                     0 -> "No apps are tagged with '${tag.name}'."
                     1 -> "1 app will be blocked:"
-                    else -> "${affectedPackages.size} apps will be blocked:"
+                    else -> "${affectedApps.size} apps will be blocked:"
                 }
                 Text(
                     text = countLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp,
+                    color = Color.White,
                 )
-                if (affectedPackages.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(120.dp)
-                            .testTag("block_tag_preview_list"),
-                    ) {
-                        items(items = affectedPackages, key = { it }) { pkg ->
-                            Text(
-                                text = pkg,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
+            }
 
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Pick a duration. Blocks cannot be undone.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
+            if (affectedApps.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .testTag("block_tag_preview_list"),
                 ) {
-                    BlockDuration.entries.forEach { duration ->
-                        Button(
-                            onClick = { onConfirm(duration) },
-                            enabled = affectedPackages.isNotEmpty(),
-                            modifier = Modifier.testTag("block_tag_duration_${duration.label}"),
-                        ) {
-                            Text(text = duration.label)
-                        }
+                    items(items = affectedApps, key = { it.packageName }) { app ->
+                        Text(
+                            text = app.label,
+                            fontSize = 13.sp,
+                            color = Color.White,
+                            modifier = Modifier
+                                .padding(vertical = 3.dp)
+                                .testTag("block_tag_preview_app_${app.packageName}"),
+                        )
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.testTag("block_tag_cancel_button"),
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Pick a duration. Blocks cannot be undone.",
+                fontSize = 13.sp,
+                color = Color.White,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(text = "Cancel")
+                BlockDuration.entries.forEach { duration ->
+                    Button(
+                        onClick = { onConfirm(duration) },
+                        enabled = affectedApps.isNotEmpty(),
+                        shape = RoundedCornerShape(4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color.Black,
+                            disabledContainerColor = Color.DarkGray,
+                            disabledContentColor = Color.LightGray,
+                        ),
+                        modifier = Modifier.testTag("block_tag_duration_${duration.label}"),
+                    ) {
+                        Text(text = duration.label, fontSize = 12.sp)
+                    }
+                }
             }
-        },
-    )
+        }
+
+        HorizontalDivider(color = Color.White, thickness = 1.dp)
+
+        DefaultModalAction(
+            text = "Cancel",
+            onClick = onDismiss,
+            modifier = Modifier.testTag("block_tag_cancel_button"),
+        )
+    }
 }

@@ -1,12 +1,14 @@
 /**
  * Compose UI tests for BlockTagPreviewDialog. Verifies the affected-app
- * count copy, the package list rendering, all 8 duration buttons, the
+ * count copy, the app-label list rendering, all 8 duration buttons, the
  * empty-tag case (no apps assigned → buttons disabled), and the cancel
- * path.
+ * path. Labels are shown — never raw package names — addressing the
+ * iteration feedback that "org.telegram.messenger" should read "Telegram".
  * Covers: ULT-75
  */
 package com.ultimatefocus.app.ui.tags
 
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -32,22 +34,31 @@ class BlockTagPreviewDialogTest {
 
     private val socialTag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
 
+    private fun apps(vararg pairs: Pair<String, String>) =
+        pairs.map { (pkg, label) -> BlockTagPreviewApp(pkg, label) }
+
     @Test
-    fun preview_listsAllAffectedPackages() {
+    fun preview_listsAllAffectedAppsByLabel() {
         composeRule.setContent {
             UltimateFocusTheme {
                 BlockTagPreviewDialog(
                     tag = socialTag,
-                    affectedPackages = listOf("com.a", "com.b", "com.c"),
+                    affectedApps = apps(
+                        "org.telegram.messenger" to "Telegram",
+                        "com.instagram.android" to "Instagram",
+                        "com.zhiliaoapp.musically" to "TikTok",
+                    ),
                     onConfirm = {},
                     onDismiss = {},
                 )
             }
         }
         composeRule.onNodeWithText("3 apps will be blocked:").assertIsDisplayed()
-        composeRule.onNodeWithText("com.a").assertIsDisplayed()
-        composeRule.onNodeWithText("com.b").assertIsDisplayed()
-        composeRule.onNodeWithText("com.c").assertIsDisplayed()
+        composeRule.onNodeWithText("Telegram").assertIsDisplayed()
+        composeRule.onNodeWithText("Instagram").assertIsDisplayed()
+        composeRule.onNodeWithText("TikTok").assertIsDisplayed()
+        // Critical: the raw packageName must not be visible.
+        composeRule.onNodeWithText("org.telegram.messenger").assertDoesNotExist()
     }
 
     @Test
@@ -56,7 +67,7 @@ class BlockTagPreviewDialogTest {
             UltimateFocusTheme {
                 BlockTagPreviewDialog(
                     tag = socialTag,
-                    affectedPackages = listOf("com.only"),
+                    affectedApps = apps("com.only" to "Only"),
                     onConfirm = {},
                     onDismiss = {},
                 )
@@ -71,7 +82,7 @@ class BlockTagPreviewDialogTest {
             UltimateFocusTheme {
                 BlockTagPreviewDialog(
                     tag = socialTag,
-                    affectedPackages = listOf("com.a"),
+                    affectedApps = apps("com.a" to "A"),
                     onConfirm = {},
                     onDismiss = {},
                 )
@@ -89,7 +100,7 @@ class BlockTagPreviewDialogTest {
             UltimateFocusTheme {
                 BlockTagPreviewDialog(
                     tag = socialTag,
-                    affectedPackages = listOf("com.a"),
+                    affectedApps = apps("com.a" to "A"),
                     onConfirm = { picked = it },
                     onDismiss = {},
                 )
@@ -105,7 +116,7 @@ class BlockTagPreviewDialogTest {
             UltimateFocusTheme {
                 BlockTagPreviewDialog(
                     tag = socialTag,
-                    affectedPackages = emptyList(),
+                    affectedApps = emptyList(),
                     onConfirm = {},
                     onDismiss = {},
                 )
@@ -122,7 +133,7 @@ class BlockTagPreviewDialogTest {
             UltimateFocusTheme {
                 BlockTagPreviewDialog(
                     tag = socialTag,
-                    affectedPackages = listOf("com.a"),
+                    affectedApps = apps("com.a" to "A"),
                     onConfirm = {},
                     onDismiss = { dismissed = true },
                 )

@@ -1,15 +1,19 @@
 /**
  * Room-backed implementation of TagRepository. All write paths return
  * Result<...> with a TagOperationError on failure so the UI can surface
- * exact reasons (cap reached, color in use, app cap reached) without
- * try/catch. Reads expose Flow so the UI auto-refreshes.
+ * exact reasons (cap reached, color in use, app cap reached, currently
+ * blocked) without try/catch. Reads expose Flow so the UI auto-refreshes.
  * Cross-ref deletion happens via FK cascade in AppTagCrossRef when a tag
- * row is removed; we do not delete cross-ref rows manually.
- * Covers: ULT-72, ULT-73
+ * row is removed; we also wipe the cross-ref explicitly inside deleteTag
+ * so the contract is testable without relying on FK cascade simulation.
+ * deleteTag refuses while a tag-block is active (ULT-75 follow-up): users
+ * cannot delete a tag mid-block, mirroring the no-self-unblock invariant.
+ * Covers: ULT-72, ULT-73, ULT-75
  */
 package com.ultimatefocus.app.data.repository
 
 import com.ultimatefocus.app.data.local.dao.AppTagDao
+import com.ultimatefocus.app.data.local.dao.BlockedTagDao
 import com.ultimatefocus.app.data.local.dao.TagDao
 import com.ultimatefocus.app.data.local.entity.AppTagCrossRef
 import com.ultimatefocus.app.data.local.entity.TagEntity
@@ -30,6 +34,7 @@ import javax.inject.Singleton
 class TagRepositoryImpl @Inject constructor(
     private val tagDao: TagDao,
     private val appTagDao: AppTagDao,
+    private val blockedTagDao: BlockedTagDao,
     private val clock: Clock,
 ) : TagRepository {
 
@@ -95,6 +100,13 @@ class TagRepositoryImpl @Inject constructor(
     override suspend fun deleteTag(id: Long): Result<Unit> {
         if (tagDao.getById(id) == null) {
             return Result.failure(TagOperationError.TagNotFound)
+        }
+        // Refuse while a tag-block is active. Mirrors the ULT-19/21
+        // no-self-unblock invariant — a user cannot escape a tag-block by
+        // deleting the tag.
+        val activeBlock = blockedTagDao.getByTag(id)
+        if (activeBlock != null && activeBlock.blockedUntilEpochMs > clock.now()) {
+            return Result.failure(TagOperationError.TagCurrentlyBlocked)
         }
         // Explicit cleanup of cross-refs so the contract is testable without
         // relying on Room's FK ON DELETE CASCADE; the FK still provides a

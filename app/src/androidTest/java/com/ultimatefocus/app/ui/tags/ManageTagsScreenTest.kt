@@ -49,7 +49,7 @@ class ManageTagsScreenTest {
             .allowMainThreadQueries()
             .build()
         clock = FakeClock(0L)
-        tagRepo = TagRepositoryImpl(db.tagDao(), db.appTagDao(), clock)
+        tagRepo = TagRepositoryImpl(db.tagDao(), db.appTagDao(), db.blockedTagDao(), clock)
         blockedTagRepo = BlockedTagRepositoryImpl(db.blockedTagDao(), clock)
     }
 

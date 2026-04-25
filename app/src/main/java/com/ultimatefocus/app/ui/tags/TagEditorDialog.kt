@@ -1,11 +1,16 @@
 /**
- * Modal dialog for creating or editing a tag. Inputs:
- * - Name TextField (required, trimmed; max 24 chars)
+ * Modal dialog for creating or editing a tag, rendered inside the launcher's
+ * "default app modal" container (black surface, white border, in-line header).
+ * Inputs:
+ * - Name TextField (required, trimmed; max 24 chars) — uses the dark
+ *   modal palette so the text stays readable on black.
  * - 10-swatch color grid; swatches whose color is already used by another
  *   tag are greyed out and unselectable, except for the swatch matching the
  *   tag currently being edited (so editing without changing the color is OK).
- * Save is disabled until both inputs are valid. Stateless content — caller
- * supplies the existing Tag (null = create mode) and handlers.
+ * Save is disabled until both inputs are valid; Save and Cancel render as
+ * standard DefaultModalAction rows beneath a thin divider.
+ * Stateless content — caller supplies the existing Tag (null = create mode)
+ * and handlers.
  * Covers: ULT-72
  */
 package com.ultimatefocus.app.ui.tags
@@ -24,12 +29,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,8 +44,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ultimatefocus.app.domain.model.Tag
 import com.ultimatefocus.app.domain.model.TagColor
+import com.ultimatefocus.app.ui.components.DefaultAppModal
+import com.ultimatefocus.app.ui.components.DefaultModalAction
 
 private const val NAME_CHAR_LIMIT = 24
 
@@ -59,75 +66,88 @@ fun TagEditorDialog(
         name.trim().isNotEmpty() && selectedColor != null
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    DefaultAppModal(
+        header = if (existing == null) "Create tag" else "Edit tag",
+        onDismiss = onDismiss,
         modifier = Modifier.testTag("tag_editor_dialog"),
-        title = {
-            Text(text = if (existing == null) "Create tag" else "Edit tag")
-        },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { if (it.length <= NAME_CHAR_LIMIT) name = it },
-                    label = { Text("Name") },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("tag_editor_name_field"),
-                )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+        ) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { if (it.length <= NAME_CHAR_LIMIT) name = it },
+                label = { Text(text = "Name", color = Color.White, fontSize = 12.sp) },
+                singleLine = true,
+                colors = darkTextFieldColors(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("tag_editor_name_field"),
+            )
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-                Text(
-                    text = "Color",
-                    style = MaterialTheme.typography.labelLarge,
-                )
+            Text(
+                text = "Color",
+                fontSize = 12.sp,
+                color = Color.White,
+            )
 
-                Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    TagColor.values().forEach { swatch ->
-                        val isCurrentTagColor = existing?.color == swatch
-                        val isUsedByAnother = swatch in takenColors && !isCurrentTagColor
-                        val selected = selectedColor == swatch
-                        TagSwatch(
-                            color = swatch,
-                            selected = selected,
-                            disabled = isUsedByAnother,
-                            onClick = { if (!isUsedByAnother) selectedColor = swatch },
-                            modifier = Modifier.testTag(swatchTestTag(swatch, isUsedByAnother)),
-                        )
-                    }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                TagColor.values().forEach { swatch ->
+                    val isCurrentTagColor = existing?.color == swatch
+                    val isUsedByAnother = swatch in takenColors && !isCurrentTagColor
+                    val selected = selectedColor == swatch
+                    TagSwatch(
+                        color = swatch,
+                        selected = selected,
+                        disabled = isUsedByAnother,
+                        onClick = { if (!isUsedByAnother) selectedColor = swatch },
+                        modifier = Modifier.testTag(swatchTestTag(swatch, isUsedByAnother)),
+                    )
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = canSave,
-                onClick = {
-                    val color = selectedColor ?: return@TextButton
-                    onSave(name.trim(), color)
-                },
-                modifier = Modifier.testTag("tag_editor_save_button"),
-            ) {
-                Text(text = "Save")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.testTag("tag_editor_cancel_button"),
-            ) {
-                Text(text = "Cancel")
-            }
-        },
-    )
+        }
+
+        HorizontalDivider(color = Color.White, thickness = 1.dp)
+
+        DefaultModalAction(
+            text = "Save",
+            onClick = {
+                val color = selectedColor ?: return@DefaultModalAction
+                onSave(name.trim(), color)
+            },
+            enabled = canSave,
+            modifier = Modifier.testTag("tag_editor_save_button"),
+        )
+        DefaultModalAction(
+            text = "Cancel",
+            onClick = onDismiss,
+            modifier = Modifier.testTag("tag_editor_cancel_button"),
+        )
+    }
 }
+
+@Composable
+private fun darkTextFieldColors() = TextFieldDefaults.colors(
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent,
+    focusedTextColor = Color.White,
+    unfocusedTextColor = Color.White,
+    focusedIndicatorColor = Color.White,
+    unfocusedIndicatorColor = Color.Gray,
+    focusedLabelColor = Color.White,
+    unfocusedLabelColor = Color.Gray,
+    cursorColor = Color.White,
+)
 
 @Composable
 private fun TagSwatch(
@@ -149,13 +169,12 @@ private fun TagSwatch(
                 )
                 .border(
                     width = if (selected) 3.dp else 1.dp,
-                    color = if (selected) MaterialTheme.colorScheme.onBackground else Color.Transparent,
+                    color = if (selected) Color.White else Color.Transparent,
                     shape = CircleShape,
                 )
                 .clickable(enabled = !disabled, onClick = onClick),
         ) {
             if (disabled) {
-                // Mark used-color swatches with a faint cross via overlapping bars.
                 Box(
                     modifier = Modifier
                         .size(2.dp, 24.dp)

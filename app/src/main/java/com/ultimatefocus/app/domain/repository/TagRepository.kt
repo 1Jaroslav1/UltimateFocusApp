@@ -21,6 +21,10 @@ sealed class TagOperationError(message: String) : Throwable(message) {
     data object ColorAlreadyUsed : TagOperationError("That color is already used by another tag.")
     data object AppTagLimitReached : TagOperationError("App already has the maximum 5 tags.")
     data object TagNotFound : TagOperationError("Tag not found.")
+    /** Returned by deleteTag when an active block on the tag is in effect (ULT-75). */
+    data object TagCurrentlyBlocked : TagOperationError(
+        "Cannot delete a tag while its block is active.",
+    )
     data class NameBlank(val raw: String) : TagOperationError("Tag name cannot be blank.")
 }
 

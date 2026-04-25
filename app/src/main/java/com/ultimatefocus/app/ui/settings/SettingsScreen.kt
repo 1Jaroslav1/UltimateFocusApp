@@ -30,15 +30,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -305,8 +302,11 @@ private fun providerLabelFor(
 }
 
 /**
- * Radio-button picker for the swipe-up search provider. A "System default"
- * entry is prepended so the user can opt out of a specific app (ULT-16).
+ * Picker for the swipe-up search provider rendered in the launcher's
+ * default app modal style. A "System default" entry is prepended so the
+ * user can opt out of a specific app (ULT-16). The currently-selected
+ * row is prefixed with "✓ " so the dark, text-only modal can express
+ * selection without a Material RadioButton.
  */
 @Composable
 private fun SearchProviderPickerDialog(
@@ -315,54 +315,45 @@ private fun SearchProviderPickerDialog(
     onSelect: (String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    com.ultimatefocus.app.ui.components.DefaultAppModal(
+        header = "Search provider",
+        onDismiss = onDismiss,
         modifier = Modifier.testTag("search_provider_dialog"),
-        title = { Text(text = "Search provider") },
-        text = {
-            Column {
-                ProviderRow(
-                    label = "System default",
-                    selected = currentSelection == null,
-                    onClick = { onSelect(null) },
-                    testTag = "provider_option_system_default",
-                )
-                providers.forEach { provider ->
-                    ProviderRow(
-                        label = provider.label,
-                        selected = currentSelection == provider.packageName,
-                        onClick = { onSelect(provider.packageName) },
-                        testTag = "provider_option_${provider.packageName}",
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(text = "Close") }
-        },
-    )
-}
-
-@Composable
-private fun ProviderRow(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    testTag: String,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 8.dp)
-            .testTag(testTag),
     ) {
-        RadioButton(selected = selected, onClick = onClick)
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(start = 8.dp),
+        com.ultimatefocus.app.ui.components.DefaultModalAction(
+            text = providerActionLabel("System default", currentSelection == null),
+            onClick = {
+                onSelect(null)
+                onDismiss()
+            },
+            modifier = Modifier.testTag("provider_option_system_default"),
+        )
+        providers.forEach { provider ->
+            com.ultimatefocus.app.ui.components.DefaultModalAction(
+                text = providerActionLabel(
+                    provider.label,
+                    currentSelection == provider.packageName,
+                ),
+                onClick = {
+                    onSelect(provider.packageName)
+                    onDismiss()
+                },
+                modifier = Modifier.testTag("provider_option_${provider.packageName}"),
+            )
+        }
+
+        androidx.compose.material3.HorizontalDivider(
+            color = androidx.compose.ui.graphics.Color.White,
+            thickness = 1.dp,
+        )
+
+        com.ultimatefocus.app.ui.components.DefaultModalAction(
+            text = "Close",
+            onClick = onDismiss,
+            modifier = Modifier.testTag("provider_option_close"),
         )
     }
 }
+
+private fun providerActionLabel(label: String, selected: Boolean): String =
+    if (selected) "✓  $label" else "    $label"

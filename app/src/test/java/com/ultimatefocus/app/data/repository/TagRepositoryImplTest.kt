@@ -9,6 +9,7 @@ package com.ultimatefocus.app.data.repository
 
 import app.cash.turbine.test
 import com.ultimatefocus.app.data.local.dao.FakeAppTagDao
+import com.ultimatefocus.app.data.local.dao.FakeBlockedTagDao
 import com.ultimatefocus.app.data.local.dao.FakeTagDao
 import com.ultimatefocus.app.domain.model.MAX_TAGS
 import com.ultimatefocus.app.domain.model.MAX_TAGS_PER_APP
@@ -28,6 +29,7 @@ class TagRepositoryImplTest {
 
     private lateinit var tagDao: FakeTagDao
     private lateinit var appTagDao: FakeAppTagDao
+    private lateinit var blockedTagDao: FakeBlockedTagDao
     private lateinit var clock: FakeClock
     private lateinit var repo: TagRepositoryImpl
 
@@ -35,8 +37,9 @@ class TagRepositoryImplTest {
     fun setUp() {
         tagDao = FakeTagDao()
         appTagDao = FakeAppTagDao()
+        blockedTagDao = FakeBlockedTagDao()
         clock = FakeClock(current = 1_000_000L)
-        repo = TagRepositoryImpl(tagDao, appTagDao, clock)
+        repo = TagRepositoryImpl(tagDao, appTagDao, blockedTagDao, clock)
     }
 
     // ── createTag ───────────────────────────────────────────────────────────
@@ -145,6 +148,44 @@ class TagRepositoryImplTest {
         val result = repo.deleteTag(404L)
         assertTrue(result.isFailure)
         assertEquals(TagOperationError.TagNotFound, result.exceptionOrNull())
+    }
+
+    @Test
+    fun `deleteTag fails while a tag block is active`() = runTest {
+        val tag = repo.createTag("Locked", TagColor.SAGE_GREEN).getOrThrow()
+        // Seed an active block via the FakeBlockedTagDao (60-min into the future).
+        blockedTagDao.upsert(
+            com.ultimatefocus.app.data.local.entity.BlockedTagEntity(
+                tagId = tag.id,
+                blockedUntilEpochMs = clock.current + 60 * 60_000L,
+                blockedSinceEpochMs = clock.current,
+                durationLabel = "1h",
+            ),
+        )
+        val result = repo.deleteTag(tag.id)
+        assertTrue(result.isFailure)
+        assertEquals(TagOperationError.TagCurrentlyBlocked, result.exceptionOrNull())
+        // Tag still exists.
+        assertTrue(repo.getTag(tag.id) != null)
+    }
+
+    @Test
+    fun `deleteTag succeeds after the tag block has expired`() = runTest {
+        val tag = repo.createTag("Locked", TagColor.SAGE_GREEN).getOrThrow()
+        blockedTagDao.upsert(
+            com.ultimatefocus.app.data.local.entity.BlockedTagEntity(
+                tagId = tag.id,
+                blockedUntilEpochMs = clock.current + 60 * 60_000L,
+                blockedSinceEpochMs = clock.current,
+                durationLabel = "1h",
+            ),
+        )
+        // Advance past the block.
+        clock.current += 60 * 60_000L + 1L
+
+        val result = repo.deleteTag(tag.id)
+        assertTrue(result.isSuccess)
+        assertNull(repo.getTag(tag.id))
     }
 
     // ── observeTags ─────────────────────────────────────────────────────────

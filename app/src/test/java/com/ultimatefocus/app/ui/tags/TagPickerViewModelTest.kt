@@ -8,6 +8,7 @@
 package com.ultimatefocus.app.ui.tags
 
 import com.ultimatefocus.app.data.local.dao.FakeAppTagDao
+import com.ultimatefocus.app.data.local.dao.FakeBlockedTagDao
 import com.ultimatefocus.app.data.local.dao.FakeTagDao
 import com.ultimatefocus.app.data.repository.TagRepositoryImpl
 import com.ultimatefocus.app.domain.model.MAX_TAGS_PER_APP
@@ -40,7 +41,7 @@ class TagPickerViewModelTest {
         Dispatchers.setMain(dispatcher)
         tagDao = FakeTagDao()
         appTagDao = FakeAppTagDao()
-        repo = TagRepositoryImpl(tagDao, appTagDao, FakeClock(0L))
+        repo = TagRepositoryImpl(tagDao, appTagDao, FakeBlockedTagDao(), FakeClock(0L))
     }
 
     @After
