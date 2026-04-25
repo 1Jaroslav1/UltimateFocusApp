@@ -92,6 +92,11 @@ fun NavGraph(navController: NavHostController) {
                                 launchSingleTop = true
                             }
                         },
+                        onOpenManageTags = {
+                            navController.navigate(Screen.ManageTags.route) {
+                                launchSingleTop = true
+                            }
+                        },
                     )
                 }
             }

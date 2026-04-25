@@ -4,12 +4,16 @@
  * Blocked apps (AppInfo.blockedUntilEpochMs != null) get a 🔒 prefix,
  * strikethrough, and a faded color so the user sees at a glance the app is
  * currently unavailable (ULT-20 visual indicator AC).
- * Supports tap (launch) and long-press (context menu).
- * Covers: ULT-7, ULT-20
+ * In selection mode (ULT-73 bulk tagging) the row shows a subtle selected
+ * background when isSelected is true.
+ * Supports tap (launch / toggle selection) and long-press (context menu /
+ * enter selection mode).
+ * Covers: ULT-7, ULT-20, ULT-73
  */
 package com.ultimatefocus.app.ui.drawer.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,12 +38,20 @@ fun AppListItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isSelected: Boolean = false,
 ) {
     val isBlocked = appInfo.blockedUntilEpochMs != null
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
+            .background(
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
+                } else {
+                    Color.Transparent
+                },
+            )
             .combinedClickable(
                 indication = ripple(color = Color.Gray),
                 interactionSource = null,
@@ -50,7 +62,7 @@ fun AppListItem(
             .testTag("drawer_item_${appInfo.packageName}"),
     ) {
         Text(
-            text = if (isBlocked) "\uD83D\uDD12 ${appInfo.label}" else appInfo.label,
+            text = if (isBlocked) "🔒 ${appInfo.label}" else appInfo.label,
             style = MaterialTheme.typography.titleMedium,
             color = if (isBlocked) {
                 MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)

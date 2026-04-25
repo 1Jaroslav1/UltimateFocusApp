@@ -2,16 +2,17 @@
  * Minimalist long-press context menu for an app. Replaces the earlier
  * FavoriteContextMenuDialog with a block-aware variant used on both the
  * home favorites list and the full drawer.
- * - Unblocked: "Add/Remove Favorite", "Block app…", "App Info"
+ * - Unblocked: "Add/Remove Favorite", "Block app…", "Manage tags…", "App Info"
  * - Blocked:   "Add/Remove Favorite", read-only "Blocked — {remaining}",
- *              "App Info". Deliberately NO "Unblock" row — the repository
- *              interface has no unblock method, satisfying the ULT-19
- *              "no self-unblock escape hatch" requirement at the architecture
- *              layer.
+ *              "Manage tags…", "App Info". Deliberately NO "Unblock" row —
+ *              the repository interface has no unblock method, satisfying
+ *              the ULT-19 "no self-unblock escape hatch" requirement at the
+ *              architecture layer.
  * Reuses existing test tags (`context_menu_toggle_favorite`, `context_menu_app_info`)
  * so existing instrumentation tests keep passing. Adds new tags
- * `context_menu_block_app` and `context_menu_block_status`.
- * Covers: ULT-6, ULT-20
+ * `context_menu_block_app`, `context_menu_block_status`, and
+ * `context_menu_manage_tags` (ULT-73).
+ * Covers: ULT-6, ULT-20, ULT-73
  */
 package com.ultimatefocus.app.ui.components
 
@@ -48,14 +49,20 @@ fun AppContextMenuDialog(
     nowEpochMs: Long,
     onToggleFavorite: (AppInfo) -> Unit,
     onBlockApp: (AppInfo) -> Unit,
+    onManageTags: (AppInfo) -> Unit = {},
+    onSelectMultiple: (AppInfo) -> Unit = {},
     onAppInfo: (AppInfo) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val favoriteInteraction = remember { MutableInteractionSource() }
     val blockInteraction = remember { MutableInteractionSource() }
+    val tagsInteraction = remember { MutableInteractionSource() }
+    val selectInteraction = remember { MutableInteractionSource() }
     val infoInteraction = remember { MutableInteractionSource() }
     val favoritePressed = favoriteInteraction.collectIsPressedAsState()
     val blockPressed = blockInteraction.collectIsPressedAsState()
+    val tagsPressed = tagsInteraction.collectIsPressedAsState()
+    val selectPressed = selectInteraction.collectIsPressedAsState()
     val infoPressed = infoInteraction.collectIsPressedAsState()
 
     val blockedUntil = app.blockedUntilEpochMs
@@ -156,6 +163,50 @@ fun AppContextMenuDialog(
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
+                    }
+
+                    TextButton(
+                        onClick = {
+                            onManageTags(app)
+                            onDismiss()
+                        },
+                        interactionSource = tagsInteraction,
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = if (tagsPressed.value) Color.Gray else Color.Transparent,
+                        ),
+                        shape = RoundedCornerShape(0.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("context_menu_manage_tags"),
+                    ) {
+                        Text(
+                            text = "Manage tags…",
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            onSelectMultiple(app)
+                            onDismiss()
+                        },
+                        interactionSource = selectInteraction,
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = if (selectPressed.value) Color.Gray else Color.Transparent,
+                        ),
+                        shape = RoundedCornerShape(0.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("context_menu_select_multiple"),
+                    ) {
+                        Text(
+                            text = "Select multiple…",
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
 
                     TextButton(

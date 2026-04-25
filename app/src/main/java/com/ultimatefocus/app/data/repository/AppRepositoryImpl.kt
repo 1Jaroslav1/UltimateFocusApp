@@ -1,10 +1,12 @@
 /**
  * Offline-first repository implementation:
  * - Queries the Android LauncherApps system service for installed apps
- * - Combines installed apps with Room-persisted favorites and active blocks
+ * - Combines installed apps with Room-persisted favorites, active blocks
  *   (manual ULT-20 ∪ scheduled ULT-24) reactively via BlockingSourceCoordinator
  *   — blocked apps carry a non-null AppInfo.blockedUntilEpochMs so the UI can
- *   render the lock + strikethrough.
+ *   render the lock + strikethrough — and tag assignments (ULT-73 — apps
+ *   carry their assigned Tag list, used to render colored-dot indicators
+ *   next to the label).
  * - launchApp enforces blocks: when the target app has an active block
  *   it returns LaunchResult.Blocked instead of starting the intent. The
  *   caller routes the user to BlockedAppActivity (ULT-21).
@@ -14,7 +16,7 @@
  * - Resolves bottom-bar quick-access shortcuts: materializes a user override
  *   to an AppInfo, or falls back to the system default dialer/camera via
  *   PackageManager.resolveActivity (ULT-13, ULT-14)
- * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20, ULT-21, ULT-24
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20, ULT-21, ULT-24, ULT-73
  */
 package com.ultimatefocus.app.data.repository
 
@@ -35,6 +37,7 @@ import com.ultimatefocus.app.domain.model.ShortcutSlot
 import com.ultimatefocus.app.domain.model.ShortcutTarget
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import com.ultimatefocus.app.domain.repository.BlockingScheduleRepository
+import com.ultimatefocus.app.domain.repository.TagRepository
 import com.ultimatefocus.app.domain.service.BlockingSourceCoordinator
 import com.ultimatefocus.app.domain.service.Clock
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -55,6 +58,7 @@ class AppRepositoryImpl @Inject constructor(
     private val blockedAppRepository: BlockedAppRepository,
     private val blockingScheduleRepository: BlockingScheduleRepository,
     private val coordinator: BlockingSourceCoordinator,
+    private val tagRepository: TagRepository,
     private val clock: Clock,
 ) : AppRepository {
 
@@ -116,7 +120,8 @@ class AppRepositoryImpl @Inject constructor(
             favoriteDao.getFavoritePackageNames(),
             blockedAppRepository.observeActiveBlocks(),
             blockingScheduleRepository.observeActiveWindowEndByPackage(),
-        ) { apps, favorites, manualBlocks, scheduledUntilByPkg ->
+            tagRepository.observeAppToTagsMap(),
+        ) { apps, favorites, manualBlocks, scheduledUntilByPkg, tagsByApp ->
             val manualUntilByPkg = manualBlocks.associate { it.packageName to it.blockedUntilEpochMs }
             apps.map { app ->
                 app.copy(
@@ -124,6 +129,7 @@ class AppRepositoryImpl @Inject constructor(
                     blockedUntilEpochMs = resolveBlockedUntil(
                         app.packageName, manualUntilByPkg, scheduledUntilByPkg,
                     ),
+                    tags = tagsByApp[app.packageName] ?: emptyList(),
                 )
             }
         }
@@ -140,7 +146,8 @@ class AppRepositoryImpl @Inject constructor(
             favoriteDao.getAllFavorites(),
             blockedAppRepository.observeActiveBlocks(),
             blockingScheduleRepository.observeActiveWindowEndByPackage(),
-        ) { apps, favorites, manualBlocks, scheduledUntilByPkg ->
+            tagRepository.observeAppToTagsMap(),
+        ) { apps, favorites, manualBlocks, scheduledUntilByPkg, tagsByApp ->
             val favoriteMap = favorites.associateBy { it.packageName }
             val manualUntilByPkg = manualBlocks.associate { it.packageName to it.blockedUntilEpochMs }
             apps.filter { it.packageName in favoriteMap }
@@ -151,6 +158,7 @@ class AppRepositoryImpl @Inject constructor(
                         blockedUntilEpochMs = resolveBlockedUntil(
                             app.packageName, manualUntilByPkg, scheduledUntilByPkg,
                         ),
+                        tags = tagsByApp[app.packageName] ?: emptyList(),
                     )
                 }
                 .sortedBy { it.favoriteOrder }
