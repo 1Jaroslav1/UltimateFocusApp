@@ -1,10 +1,10 @@
 /**
  * BroadcastReceiver that fires when the device finishes booting.
- * Best-effort prune of expired app blocks so the notification listener
- * service wakes up with an accurate view of "what is currently blocked".
- * A reboot is the one way a block can silently expire without the launcher
- * process being alive to observe it — we catch up here.
- * Covers: ULT-5, ULT-22
+ * Best-effort prune of expired app blocks AND tag blocks so the notification
+ * listener service wakes up with an accurate view of "what is currently
+ * blocked". A reboot is the one way a block can silently expire without the
+ * launcher process being alive to observe it — we catch up here.
+ * Covers: ULT-5, ULT-22, ULT-75
  */
 package com.ultimatefocus.app.receiver
 
@@ -12,6 +12,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
+import com.ultimatefocus.app.domain.repository.BlockedTagRepository
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -27,6 +28,7 @@ class BootReceiver : BroadcastReceiver() {
     @InstallIn(SingletonComponent::class)
     interface BootReceiverEntryPoint {
         fun blockedAppRepository(): BlockedAppRepository
+        fun blockedTagRepository(): BlockedTagRepository
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -39,6 +41,7 @@ class BootReceiver : BroadcastReceiver() {
         scope.launch {
             try {
                 entryPoint.blockedAppRepository().pruneExpired()
+                entryPoint.blockedTagRepository().pruneExpired()
             } finally {
                 pendingResult.finish()
             }

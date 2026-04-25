@@ -1,11 +1,12 @@
 /**
  * Manage Tags screen — full-screen list of user-defined tags with a "Create
  * tag" CTA at the top. Tapping a tag row opens TagEditorDialog in edit mode.
- * Long-pressing a row opens an action menu offering Edit and Delete; once
- * ULT-75 lands, "Block by tag" will be added to the same menu.
+ * Long-pressing a row opens an action menu offering Edit, Delete, and
+ * Block-by-Tag (ULT-75). When a tag has an active block, its row shows a
+ * lock badge with the remaining duration.
  * The Create CTA is disabled when 10 tags exist and shows a sub-line
  * explaining the limit. Empty state encourages first-tag creation.
- * Covers: ULT-72
+ * Covers: ULT-72, ULT-75
  */
 package com.ultimatefocus.app.ui.tags
 
@@ -52,18 +53,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.MAX_TAGS
 import com.ultimatefocus.app.domain.model.Tag
 import com.ultimatefocus.app.domain.repository.TagOperationError
+import com.ultimatefocus.app.util.BlockedTimeFormatter
 import kotlinx.coroutines.launch
 
 @Composable
 fun ManageTagsScreen(
     onNavigateBack: () -> Unit,
     viewModel: ManageTagsViewModel = hiltViewModel(),
+    blockTagViewModel: BlockTagViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val activeTagBlocks by blockTagViewModel.activeTagBlocks.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val nowMs = System.currentTimeMillis()
 
     var dialogState by remember { mutableStateOf<TagDialogState>(TagDialogState.Hidden) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -116,8 +122,10 @@ fun ManageTagsScreen(
                     .testTag("manage_tags_list"),
             ) {
                 items(items = state.tags, key = { it.id }) { tag ->
+                    val activeBlock = activeTagBlocks[tag.id]
                     TagRow(
                         tag = tag,
+                        blockedRemainingMs = activeBlock?.let { it.blockedUntilEpochMs - nowMs },
                         onClick = { dialogState = TagDialogState.Editor(existing = tag) },
                         onLongPress = { dialogState = TagDialogState.RowMenu(tag) },
                     )
@@ -146,11 +154,18 @@ fun ManageTagsScreen(
         is TagDialogState.RowMenu -> {
             TagRowActionMenu(
                 tag = s.tag,
+                isBlocked = s.tag.id in activeTagBlocks,
                 onEdit = { dialogState = TagDialogState.Editor(existing = s.tag) },
                 onDelete = {
                     scope.launch {
                         val count = viewModel.affectedAppCountForTag(s.tag.id)
                         dialogState = TagDialogState.DeleteConfirm(s.tag, count)
+                    }
+                },
+                onBlock = {
+                    scope.launch {
+                        val packages = blockTagViewModel.preview(s.tag.id)
+                        dialogState = TagDialogState.BlockPreview(s.tag, packages)
                     }
                 },
                 onDismiss = { dialogState = TagDialogState.Hidden },
@@ -162,6 +177,17 @@ fun ManageTagsScreen(
                 affectedAppCount = s.affectedAppCount,
                 onConfirm = {
                     viewModel.deleteTag(s.tag.id)
+                    dialogState = TagDialogState.Hidden
+                },
+                onDismiss = { dialogState = TagDialogState.Hidden },
+            )
+        }
+        is TagDialogState.BlockPreview -> {
+            BlockTagPreviewDialog(
+                tag = s.tag,
+                affectedPackages = s.affectedPackages,
+                onConfirm = { duration: BlockDuration ->
+                    blockTagViewModel.blockTag(s.tag.id, duration)
                     dialogState = TagDialogState.Hidden
                 },
                 onDismiss = { dialogState = TagDialogState.Hidden },
@@ -223,6 +249,7 @@ private fun CreateTagRow(isAtLimit: Boolean, onClick: () -> Unit) {
 @Composable
 private fun TagRow(
     tag: Tag,
+    blockedRemainingMs: Long?,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
@@ -245,7 +272,17 @@ private fun TagRow(
             text = tag.name,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f, fill = false),
         )
+        if (blockedRemainingMs != null && blockedRemainingMs > 0L) {
+            Spacer(modifier = Modifier.size(8.dp))
+            Text(
+                text = "🔒 ${BlockedTimeFormatter.formatRemaining(blockedRemainingMs)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("tag_lock_indicator_${tag.id}"),
+            )
+        }
     }
 }
 
@@ -278,6 +315,7 @@ private sealed class TagDialogState {
     data class Editor(val existing: Tag?) : TagDialogState()
     data class RowMenu(val tag: Tag) : TagDialogState()
     data class DeleteConfirm(val tag: Tag, val affectedAppCount: Int) : TagDialogState()
+    data class BlockPreview(val tag: Tag, val affectedPackages: List<String>) : TagDialogState()
 }
 
 private fun TagOperationError.toUiMessage(): String = when (this) {
@@ -291,29 +329,47 @@ private fun TagOperationError.toUiMessage(): String = when (this) {
 @Composable
 private fun TagRowActionMenu(
     tag: Tag,
+    isBlocked: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onBlock: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.testTag("tag_row_menu"),
         title = { Text(text = tag.name) },
-        text = { Text(text = "Choose an action.") },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onEdit()
-                    onDismiss()
+        text = {
+            Text(
+                text = if (isBlocked) {
+                    "This tag is currently blocking its apps."
+                } else {
+                    "Choose an action."
                 },
-                modifier = Modifier.testTag("tag_row_menu_edit"),
-            ) { Text(text = "Edit") }
+            )
+        },
+        confirmButton = {
+            Column {
+                TextButton(
+                    onClick = {
+                        onEdit()
+                        onDismiss()
+                    },
+                    modifier = Modifier.testTag("tag_row_menu_edit"),
+                ) { Text(text = "Edit") }
+                if (!isBlocked) {
+                    TextButton(
+                        onClick = {
+                            onBlock()
+                        },
+                        modifier = Modifier.testTag("tag_row_menu_block"),
+                    ) { Text(text = "Block by tag…") }
+                }
+            }
         },
         dismissButton = {
             TextButton(
-                onClick = {
-                    onDelete()
-                },
+                onClick = onDelete,
                 modifier = Modifier.testTag("tag_row_menu_delete"),
             ) { Text(text = "Delete") }
         },

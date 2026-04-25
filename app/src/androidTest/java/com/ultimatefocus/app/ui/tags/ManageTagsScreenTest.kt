@@ -1,9 +1,10 @@
 /**
- * Compose UI tests for ManageTagsScreen using a real ManageTagsViewModel
- * backed by an in-memory Room database. Verifies: empty state copy,
- * Create flow inserts a row visible in the list, 10-tag cap disables the
- * Create CTA and shows the limit message.
- * Covers: ULT-72
+ * Compose UI tests for ManageTagsScreen using a real ManageTagsViewModel +
+ * BlockTagViewModel backed by an in-memory Room database. Verifies: empty
+ * state copy, Create flow inserts a row visible in the list, 10-tag cap
+ * disables the Create CTA, lock indicator appears for blocked tags
+ * (ULT-75).
+ * Covers: ULT-72, ULT-75
  */
 package com.ultimatefocus.app.ui.tags
 
@@ -18,7 +19,9 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.ultimatefocus.app.data.local.AppDatabase
+import com.ultimatefocus.app.data.repository.BlockedTagRepositoryImpl
 import com.ultimatefocus.app.data.repository.TagRepositoryImpl
+import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.TagColor
 import com.ultimatefocus.app.domain.service.FakeClock
 import com.ultimatefocus.app.ui.theme.UltimateFocusTheme
@@ -35,7 +38,9 @@ class ManageTagsScreenTest {
     val composeRule = createComposeRule()
 
     private lateinit var db: AppDatabase
-    private lateinit var repo: TagRepositoryImpl
+    private lateinit var tagRepo: TagRepositoryImpl
+    private lateinit var blockedTagRepo: BlockedTagRepositoryImpl
+    private lateinit var clock: FakeClock
 
     @Before
     fun setUp() {
@@ -43,11 +48,16 @@ class ManageTagsScreenTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        repo = TagRepositoryImpl(db.tagDao(), db.appTagDao(), FakeClock(0L))
+        clock = FakeClock(0L)
+        tagRepo = TagRepositoryImpl(db.tagDao(), db.appTagDao(), clock)
+        blockedTagRepo = BlockedTagRepositoryImpl(db.blockedTagDao(), clock)
     }
 
     @After
     fun tearDown() = db.close()
+
+    private fun makeManageVm() = ManageTagsViewModel(tagRepo)
+    private fun makeBlockTagVm() = BlockTagViewModel(tagRepo, blockedTagRepo)
 
     @Test
     fun emptyState_isDisplayed_whenNoTagsExist() {
@@ -55,7 +65,8 @@ class ManageTagsScreenTest {
             UltimateFocusTheme {
                 ManageTagsScreen(
                     onNavigateBack = {},
-                    viewModel = ManageTagsViewModel(repo),
+                    viewModel = makeManageVm(),
+                    blockTagViewModel = makeBlockTagVm(),
                 )
             }
         }
@@ -69,7 +80,8 @@ class ManageTagsScreenTest {
             UltimateFocusTheme {
                 ManageTagsScreen(
                     onNavigateBack = {},
-                    viewModel = ManageTagsViewModel(repo),
+                    viewModel = makeManageVm(),
+                    blockTagViewModel = makeBlockTagVm(),
                 )
             }
         }
@@ -83,16 +95,16 @@ class ManageTagsScreenTest {
 
     @Test
     fun ten_tag_cap_disables_create_cta_with_explanatory_message() {
-        // Pre-seed 10 tags via the repo
         TagColor.values().forEachIndexed { idx, color ->
-            kotlinx.coroutines.runBlocking { repo.createTag("Tag$idx", color) }
+            kotlinx.coroutines.runBlocking { tagRepo.createTag("Tag$idx", color) }
         }
 
         composeRule.setContent {
             UltimateFocusTheme {
                 ManageTagsScreen(
                     onNavigateBack = {},
-                    viewModel = ManageTagsViewModel(repo),
+                    viewModel = makeManageVm(),
+                    blockTagViewModel = makeBlockTagVm(),
                 )
             }
         }
@@ -101,12 +113,38 @@ class ManageTagsScreenTest {
     }
 
     @Test
+    fun lock_indicator_renders_for_blocked_tag() {
+        // Align the FakeClock with wall-clock time so the screen's
+        // System.currentTimeMillis()-driven remaining computation produces
+        // a positive number for our seeded block.
+        clock.current = System.currentTimeMillis()
+        val tag = kotlinx.coroutines.runBlocking {
+            tagRepo.createTag("Social", TagColor.STEEL_BLUE).getOrThrow()
+        }
+        kotlinx.coroutines.runBlocking {
+            blockedTagRepo.blockTag(tag.id, BlockDuration.HOUR_1)
+        }
+
+        composeRule.setContent {
+            UltimateFocusTheme {
+                ManageTagsScreen(
+                    onNavigateBack = {},
+                    viewModel = makeManageVm(),
+                    blockTagViewModel = makeBlockTagVm(),
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tag_lock_indicator_${tag.id}").assertIsDisplayed()
+    }
+
+    @Test
     fun screen_renders_with_safe_drawing_padding() {
         composeRule.setContent {
             UltimateFocusTheme {
                 ManageTagsScreen(
                     onNavigateBack = {},
-                    viewModel = ManageTagsViewModel(repo),
+                    viewModel = makeManageVm(),
+                    blockTagViewModel = makeBlockTagVm(),
                 )
             }
         }
