@@ -3,10 +3,14 @@
  * app label, a commitment-reinforcing message, a live-updating remaining
  * time, and a single "Return home" button — no unblock / override / skip
  * affordance. Auto-dismisses when the block expires.
+ *
+ * If the block came from a recurring schedule (ULT-24) the schedule's name
+ * is shown instead of the manual-block "for {duration}" copy.
+ *
  * Split into a stateful entry point (`BlockedAppScreen`) and a stateless
  * content composable (`BlockedAppContent`) so Compose tests can render the
  * UI without a Hilt-injected ViewModel.
- * Covers: ULT-21
+ * Covers: ULT-21, ULT-24
  */
 package com.ultimatefocus.app.ui.blocked
 
@@ -55,6 +59,7 @@ fun BlockedAppScreen(
         appLabel = uiState.appLabel,
         remainingLabel = BlockedTimeFormatter.formatRemaining(uiState.remainingMs),
         unblockDateTimeLabel = uiState.unblockDateTimeLabel,
+        scheduleName = uiState.scheduleName,
         onDismiss = onDismiss,
     )
 }
@@ -64,6 +69,7 @@ fun BlockedAppContent(
     appLabel: String,
     remainingLabel: String,
     unblockDateTimeLabel: String,
+    scheduleName: String = "",
     onDismiss: () -> Unit,
 ) {
     Box(
@@ -92,11 +98,14 @@ fun BlockedAppContent(
             )
 
             Text(
-                text = "This app is blocked.",
+                text = if (scheduleName.isNotEmpty()) "Blocked by \"$scheduleName\""
+                else "This app is blocked.",
                 fontSize = 20.sp,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("blocked_app_source"),
             )
 
             Text(

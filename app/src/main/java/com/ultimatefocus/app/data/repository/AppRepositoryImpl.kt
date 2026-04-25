@@ -1,18 +1,20 @@
 /**
  * Offline-first repository implementation:
  * - Queries the Android LauncherApps system service for installed apps
- * - Combines installed apps with Room-persisted favorites and active
- *   manual blocks reactively (ULT-20 — blocked apps carry a non-null
- *   AppInfo.blockedUntilEpochMs so the UI can render the 🔒 + strikethrough)
+ * - Combines installed apps with Room-persisted favorites and active blocks
+ *   (manual ULT-20 ∪ scheduled ULT-24) reactively via BlockingSourceCoordinator
+ *   — blocked apps carry a non-null AppInfo.blockedUntilEpochMs so the UI can
+ *   render the lock + strikethrough.
  * - launchApp enforces blocks: when the target app has an active block
  *   it returns LaunchResult.Blocked instead of starting the intent. The
  *   caller routes the user to BlockedAppActivity (ULT-21).
  * - Registers a LauncherApps callback so the list auto-refreshes on
- *   installs/removals
+ *   installs/removals; on removal also calls
+ *   BlockingScheduleRepository.purgePackage to keep schedule junctions tidy.
  * - Resolves bottom-bar quick-access shortcuts: materializes a user override
  *   to an AppInfo, or falls back to the system default dialer/camera via
  *   PackageManager.resolveActivity (ULT-13, ULT-14)
- * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20, ULT-21
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20, ULT-21, ULT-24
  */
 package com.ultimatefocus.app.data.repository
 
@@ -26,12 +28,14 @@ import android.os.UserHandle
 import android.provider.MediaStore
 import com.ultimatefocus.app.data.local.dao.FavoriteDao
 import com.ultimatefocus.app.data.local.entity.FavoriteEntity
+import com.ultimatefocus.app.domain.model.ActiveBlockInfo
 import com.ultimatefocus.app.domain.model.AppInfo
-import com.ultimatefocus.app.domain.model.BlockedApp
 import com.ultimatefocus.app.domain.model.LaunchResult
 import com.ultimatefocus.app.domain.model.ShortcutSlot
 import com.ultimatefocus.app.domain.model.ShortcutTarget
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
+import com.ultimatefocus.app.domain.repository.BlockingScheduleRepository
+import com.ultimatefocus.app.domain.service.BlockingSourceCoordinator
 import com.ultimatefocus.app.domain.service.Clock
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +53,8 @@ class AppRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val favoriteDao: FavoriteDao,
     private val blockedAppRepository: BlockedAppRepository,
+    private val blockingScheduleRepository: BlockingScheduleRepository,
+    private val coordinator: BlockingSourceCoordinator,
     private val clock: Clock,
 ) : AppRepository {
 
@@ -83,7 +89,12 @@ class AppRepositoryImpl @Inject constructor(
 
     private fun registerCallback() {
         launcherApps.registerCallback(object : LauncherApps.Callback() {
-            override fun onPackageRemoved(packageName: String?, user: UserHandle?) = loadApps()
+            override fun onPackageRemoved(packageName: String?, user: UserHandle?) {
+                loadApps()
+                packageName?.let { pkg ->
+                    coroutineScope.launch { blockingScheduleRepository.purgePackage(pkg) }
+                }
+            }
             override fun onPackageAdded(packageName: String?, user: UserHandle?) = loadApps()
             override fun onPackageChanged(packageName: String?, user: UserHandle?) = loadApps()
             override fun onPackagesAvailable(
@@ -104,12 +115,15 @@ class AppRepositoryImpl @Inject constructor(
             _installedApps,
             favoriteDao.getFavoritePackageNames(),
             blockedAppRepository.observeActiveBlocks(),
-        ) { apps, favorites, blocks ->
-            val blockMap = blocks.toBlockMap()
+            blockingScheduleRepository.observeActiveWindowEndByPackage(),
+        ) { apps, favorites, manualBlocks, scheduledUntilByPkg ->
+            val manualUntilByPkg = manualBlocks.associate { it.packageName to it.blockedUntilEpochMs }
             apps.map { app ->
                 app.copy(
                     isFavorite = app.packageName in favorites,
-                    blockedUntilEpochMs = blockMap[app.packageName],
+                    blockedUntilEpochMs = resolveBlockedUntil(
+                        app.packageName, manualUntilByPkg, scheduledUntilByPkg,
+                    ),
                 )
             }
         }
@@ -125,19 +139,33 @@ class AppRepositoryImpl @Inject constructor(
             _installedApps,
             favoriteDao.getAllFavorites(),
             blockedAppRepository.observeActiveBlocks(),
-        ) { apps, favorites, blocks ->
+            blockingScheduleRepository.observeActiveWindowEndByPackage(),
+        ) { apps, favorites, manualBlocks, scheduledUntilByPkg ->
             val favoriteMap = favorites.associateBy { it.packageName }
-            val blockMap = blocks.toBlockMap()
+            val manualUntilByPkg = manualBlocks.associate { it.packageName to it.blockedUntilEpochMs }
             apps.filter { it.packageName in favoriteMap }
                 .map { app ->
                     app.copy(
                         isFavorite = true,
                         favoriteOrder = favoriteMap[app.packageName]?.displayOrder ?: 0,
-                        blockedUntilEpochMs = blockMap[app.packageName],
+                        blockedUntilEpochMs = resolveBlockedUntil(
+                            app.packageName, manualUntilByPkg, scheduledUntilByPkg,
+                        ),
                     )
                 }
                 .sortedBy { it.favoriteOrder }
         }
+
+    /**
+     * Manual block wins (more binding contract). Otherwise fall back to the
+     * scheduled window-end timestamp. Null when the package is not currently
+     * blocked from either source.
+     */
+    private fun resolveBlockedUntil(
+        packageName: String,
+        manualUntilByPkg: Map<String, Long>,
+        scheduledUntilByPkg: Map<String, Long>,
+    ): Long? = manualUntilByPkg[packageName] ?: scheduledUntilByPkg[packageName]
 
     override suspend fun toggleFavorite(appInfo: AppInfo) {
         if (favoriteDao.isFavorite(appInfo.packageName)) {
@@ -155,14 +183,25 @@ class AppRepositoryImpl @Inject constructor(
     }
 
     override suspend fun launchApp(appInfo: AppInfo): LaunchResult {
-        val block = blockedAppRepository.getBlock(appInfo.packageName)
-        if (block != null) {
-            return LaunchResult.Blocked(
-                packageName = appInfo.packageName,
-                appLabel = appInfo.label,
-                remainingMs = (block.blockedUntilEpochMs - clock.now()).coerceAtLeast(0L),
-                durationLabel = block.durationLabel,
-            )
+        val info = coordinator.activeBlockInfo(appInfo.packageName)
+        if (info != null) {
+            val remaining = (info.blockedUntilEpochMs - clock.now()).coerceAtLeast(0L)
+            return when (info) {
+                is ActiveBlockInfo.Manual -> LaunchResult.Blocked(
+                    packageName = appInfo.packageName,
+                    appLabel = appInfo.label,
+                    remainingMs = remaining,
+                    durationLabel = info.durationLabel,
+                    scheduleName = null,
+                )
+                is ActiveBlockInfo.Scheduled -> LaunchResult.Blocked(
+                    packageName = appInfo.packageName,
+                    appLabel = appInfo.label,
+                    remainingMs = remaining,
+                    durationLabel = "",
+                    scheduleName = info.scheduleName,
+                )
+            }
         }
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
@@ -211,6 +250,4 @@ class AppRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun List<BlockedApp>.toBlockMap(): Map<String, Long> =
-        associate { it.packageName to it.blockedUntilEpochMs }
 }

@@ -4,14 +4,15 @@
  * (Settings, recents, a notification tap, another app's intent, Play Store)
  * the user is redirected to BlockedAppActivity on top.
  *
- * The active-blocked set is kept in memory via a hot subscription to
- * BlockedAppRepository.observeActivePackageNames() so the hot-path event
- * handler avoids a DB hit per window transition.
+ * Reads the "currently blocked packages" set from BlockingSourceCoordinator
+ * which unifies manual blocks (ULT-20) and recurring schedules (ULT-24) into
+ * a single Set<String>. The hot-path event handler checks an in-memory copy
+ * to avoid a DB hit per window transition.
  *
  * Debounce + system-UI / own-package exclusion live in
  * BlockedAppForegroundHandler so they can be unit-tested without booting the
  * service lifecycle.
- * Covers: ULT-20, ULT-21
+ * Covers: ULT-20, ULT-21, ULT-24
  */
 package com.ultimatefocus.app.service
 
@@ -19,9 +20,9 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import com.ultimatefocus.app.domain.model.BlockedApp
-import com.ultimatefocus.app.domain.repository.BlockedAppRepository
+import com.ultimatefocus.app.domain.model.ActiveBlockInfo
 import com.ultimatefocus.app.domain.service.BlockedAppForegroundHandler
+import com.ultimatefocus.app.domain.service.BlockingSourceCoordinator
 import com.ultimatefocus.app.domain.service.Clock
 import com.ultimatefocus.app.domain.service.ForegroundAction
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity
@@ -39,7 +40,7 @@ import javax.inject.Inject
 class BlockedAppAccessibilityService : AccessibilityService() {
 
     @Inject
-    lateinit var blockedAppRepository: BlockedAppRepository
+    lateinit var coordinator: BlockingSourceCoordinator
 
     @Inject
     lateinit var foregroundHandler: BlockedAppForegroundHandler
@@ -55,7 +56,7 @@ class BlockedAppAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.d(TAG, "connected")
-        blockedAppRepository.observeActivePackageNames()
+        coordinator.observeActivePackageNames()
             .onEach {
                 activeBlocked = it
                 Log.d(TAG, "activeBlocked updated: $it")
@@ -85,18 +86,29 @@ class BlockedAppAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun showReminder(pkg: String) {
-        val block: BlockedApp = blockedAppRepository.getBlock(pkg) ?: return
+        val info: ActiveBlockInfo = coordinator.activeBlockInfo(pkg) ?: return
         val label = runCatching {
             val pm = packageManager
             pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
         }.getOrDefault(pkg)
-        val intent = BlockedAppActivity.intent(
-            context = this,
-            packageName = pkg,
-            appLabel = label,
-            blockedUntilEpochMs = block.blockedUntilEpochMs,
-            durationLabel = block.durationLabel,
-        ).apply {
+        val intent = when (info) {
+            is ActiveBlockInfo.Manual -> BlockedAppActivity.intent(
+                context = this,
+                packageName = pkg,
+                appLabel = label,
+                blockedUntilEpochMs = info.blockedUntilEpochMs,
+                durationLabel = info.durationLabel,
+                scheduleName = null,
+            )
+            is ActiveBlockInfo.Scheduled -> BlockedAppActivity.intent(
+                context = this,
+                packageName = pkg,
+                appLabel = label,
+                blockedUntilEpochMs = info.blockedUntilEpochMs,
+                durationLabel = "",
+                scheduleName = info.scheduleName,
+            )
+        }.apply {
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         startActivity(intent)

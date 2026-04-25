@@ -1,8 +1,10 @@
 /**
  * Navigation host that maps routes to composable screens.
  * Home and Drawer live inside a HorizontalPager for smooth, finger-following
- * swipe transitions. Settings is pushed on top via standard NavHost navigation.
- * Covers: ULT-5, ULT-6, ULT-7, ULT-8
+ * swipe transitions. Settings, BlockingSchedules, and BlockingScheduleEditor
+ * are pushed on top via standard NavHost navigation with horizontal slide
+ * transitions for visual consistency.
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-8, ULT-24, ULT-25
  */
 package com.ultimatefocus.app.ui.navigation
 
@@ -18,8 +20,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import com.ultimatefocus.app.ui.blocking.BlockingScheduleEditorScreen
+import com.ultimatefocus.app.ui.blocking.BlockingSchedulesListScreen
 import com.ultimatefocus.app.ui.drawer.AppDrawerScreen
 import com.ultimatefocus.app.ui.home.HomeScreen
 import com.ultimatefocus.app.ui.settings.SettingsScreen
@@ -73,6 +79,43 @@ fun NavGraph(navController: NavHostController) {
             exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
             SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToBlockingSchedules = {
+                    navController.navigate(Screen.BlockingSchedules.route) {
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
+
+        composable(
+            route = Screen.BlockingSchedules.route,
+            enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
+            exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+        ) {
+            BlockingSchedulesListScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onAddSchedule = {
+                    navController.navigate(
+                        Screen.BlockingScheduleEditor.routeFor(null),
+                    ) { launchSingleTop = true }
+                },
+                onEditSchedule = null,
+            )
+        }
+
+        composable(
+            route = Screen.BlockingScheduleEditor.route,
+            arguments = listOf(
+                navArgument(Screen.BlockingScheduleEditor.ARG_ID) {
+                    type = NavType.LongType
+                    defaultValue = Screen.BlockingScheduleEditor.NEW_ID
+                },
+            ),
+            enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
+            exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+        ) {
+            BlockingScheduleEditorScreen(
                 onNavigateBack = { navController.popBackStack() },
             )
         }

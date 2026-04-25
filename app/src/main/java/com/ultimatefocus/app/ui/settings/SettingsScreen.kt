@@ -2,8 +2,9 @@
  * Settings screen. Exposes toggles for dark theme and auto-keyboard on app drawer
  * entry, a shortcut to the system launcher selector, and a Gestures section
  * controlling the swipe-up web-search provider (ULT-16) and the
- * two-finger-double-tap-to-lock preference (ULT-18).
- * Covers: ULT-8, ULT-16, ULT-18
+ * two-finger-double-tap-to-lock preference (ULT-18). Provides the entry
+ * point to the recurring blocking-schedule list (ULT-24).
+ * Covers: ULT-8, ULT-16, ULT-18, ULT-24
  */
 package com.ultimatefocus.app.ui.settings
 
@@ -55,6 +56,7 @@ import com.ultimatefocus.app.domain.service.WebSearchProvider
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToBlockingSchedules: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -191,6 +193,17 @@ fun SettingsScreen(
                 onDismiss = { showProviderDialog = false },
             )
         }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
+
+        SectionHeader("Blocking")
+
+        SettingsRow(
+            title = "Blocking schedules",
+            subtitle = "Automatically block selected apps during recurring time windows.",
+            onClick = onNavigateToBlockingSchedules,
+            modifier = Modifier.testTag("blocking_schedules_row"),
+        )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
 
