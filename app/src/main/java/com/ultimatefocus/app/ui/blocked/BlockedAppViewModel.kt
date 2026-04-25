@@ -3,7 +3,11 @@
  * SavedStateHandle, then ticks a Clock-driven countdown each second.
  * When the block expires, shouldFinish flips so the Screen can close
  * the Activity and let the user retry launching the app.
- * Covers: ULT-21
+ *
+ * Distinguishes manual-block extras (durationLabel) from scheduled-block
+ * extras (scheduleName, ULT-24) so the screen can render the right copy.
+ *
+ * Covers: ULT-21, ULT-24
  */
 package com.ultimatefocus.app.ui.blocked
 
@@ -15,6 +19,7 @@ import com.ultimatefocus.app.ui.blocked.BlockedAppActivity.Companion.EXTRA_APP_L
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity.Companion.EXTRA_BLOCKED_UNTIL_MS
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity.Companion.EXTRA_DURATION_LABEL
 import com.ultimatefocus.app.ui.blocked.BlockedAppActivity.Companion.EXTRA_PACKAGE_NAME
+import com.ultimatefocus.app.ui.blocked.BlockedAppActivity.Companion.EXTRA_SCHEDULE_NAME
 import com.ultimatefocus.app.util.BlockedTimeFormatter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -36,6 +41,7 @@ class BlockedAppViewModel @Inject constructor(
     private val blockedUntilEpochMs: Long =
         savedStateHandle.get<Long>(EXTRA_BLOCKED_UNTIL_MS) ?: 0L
     private val durationLabel: String = savedStateHandle[EXTRA_DURATION_LABEL] ?: ""
+    private val scheduleName: String = savedStateHandle[EXTRA_SCHEDULE_NAME] ?: ""
 
     // Declared BEFORE _uiState because compute() reads this field on first
     // invocation from the _uiState initializer. Property initializers run in
@@ -63,6 +69,7 @@ class BlockedAppViewModel @Inject constructor(
             appLabel = appLabel,
             remainingMs = remaining,
             durationLabel = durationLabel,
+            scheduleName = scheduleName,
             unblockDateTimeLabel = unblockDateTimeLabel,
             shouldFinish = remaining <= 0L,
         )

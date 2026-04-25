@@ -93,6 +93,7 @@ fun HomeScreen(
                     appLabel = blocked.appLabel,
                     blockedUntilEpochMs = blockedUntilMs,
                     durationLabel = blocked.durationLabel,
+                    scheduleName = blocked.scheduleName,
                 ),
             )
         }

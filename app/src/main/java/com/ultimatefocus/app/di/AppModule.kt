@@ -2,10 +2,14 @@
  * Hilt DI modules that wire together the data layer:
  * - DatabaseModule  : provides Room database and DAOs
  * - RepositoryModule: binds AppRepository + UserPreferencesSource + SystemActions
- *                     + BlockedAppRepository + Clock
+ *                     + BlockedAppRepository + BlockingScheduleRepository
+ *                     + Clock + ZoneIdProvider
  * Database uses fallbackToDestructiveMigration because the app is pre-release
- * MVP — schema bumps (e.g. ULT-20 adding blocked_apps) wipe prior data.
- * Covers: ULT-5, ULT-16, ULT-17, ULT-18, ULT-20
+ * MVP — schema bumps (e.g. ULT-20 adding blocked_apps, ULT-24 adding
+ * blocking_schedules) wipe prior data.
+ * Also binds AppUsageStatsRepository (UsageStatsManager-backed) so the
+ * schedule editor can sort the app picker by weekly foreground usage.
+ * Covers: ULT-5, ULT-16, ULT-17, ULT-18, ULT-20, ULT-24
  */
 package com.ultimatefocus.app.di
 
@@ -13,17 +17,24 @@ import android.content.Context
 import androidx.room.Room
 import com.ultimatefocus.app.data.local.AppDatabase
 import com.ultimatefocus.app.data.local.dao.BlockedAppDao
+import com.ultimatefocus.app.data.local.dao.BlockingScheduleDao
 import com.ultimatefocus.app.data.local.dao.FavoriteDao
 import com.ultimatefocus.app.data.preferences.UserPreferencesDataStore
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.data.repository.AppRepositoryImpl
+import com.ultimatefocus.app.data.repository.AppUsageStatsRepositoryImpl
 import com.ultimatefocus.app.data.repository.BlockedAppRepositoryImpl
+import com.ultimatefocus.app.data.repository.BlockingScheduleRepositoryImpl
 import com.ultimatefocus.app.data.system.SystemActionsImpl
+import com.ultimatefocus.app.domain.repository.AppUsageStatsRepository
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
+import com.ultimatefocus.app.domain.repository.BlockingScheduleRepository
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import com.ultimatefocus.app.domain.service.Clock
 import com.ultimatefocus.app.domain.service.SystemActions
 import com.ultimatefocus.app.domain.service.SystemClock
+import com.ultimatefocus.app.domain.service.SystemZoneIdProvider
+import com.ultimatefocus.app.domain.service.ZoneIdProvider
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -48,6 +59,10 @@ object DatabaseModule {
 
     @Provides
     fun provideBlockedAppDao(database: AppDatabase): BlockedAppDao = database.blockedAppDao()
+
+    @Provides
+    fun provideBlockingScheduleDao(database: AppDatabase): BlockingScheduleDao =
+        database.blockingScheduleDao()
 }
 
 @Module
@@ -72,5 +87,21 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindBlockingScheduleRepository(
+        impl: BlockingScheduleRepositoryImpl,
+    ): BlockingScheduleRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAppUsageStatsRepository(
+        impl: AppUsageStatsRepositoryImpl,
+    ): AppUsageStatsRepository
+
+    @Binds
+    @Singleton
     abstract fun bindClock(impl: SystemClock): Clock
+
+    @Binds
+    @Singleton
+    abstract fun bindZoneIdProvider(impl: SystemZoneIdProvider): ZoneIdProvider
 }

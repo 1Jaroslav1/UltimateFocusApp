@@ -3,10 +3,15 @@
  * Hosted as a separate Activity (rather than a modal) so the reminder is
  * reachable from any launch path — favorites, drawer, quick shortcuts — and
  * survives process death.
+ *
  * Extras carry the packageName, human label, expiry timestamp, and the
- * user's chosen duration label so the ViewModel can render a live countdown.
+ * source-specific copy fragment:
+ *   - durationLabel  (manual block, e.g. "1h", "24h"; ULT-21)
+ *   - scheduleName   (recurring schedule, e.g. "Work Focus"; ULT-24)
+ * exactly one of those is non-empty.
+ *
  * excludeFromRecents + singleTask ensure the reminder is not stackable.
- * Covers: ULT-21
+ * Covers: ULT-21, ULT-24
  */
 package com.ultimatefocus.app.ui.blocked
 
@@ -51,6 +56,7 @@ class BlockedAppActivity : ComponentActivity() {
         const val EXTRA_APP_LABEL = "extra_app_label"
         const val EXTRA_BLOCKED_UNTIL_MS = "extra_blocked_until_ms"
         const val EXTRA_DURATION_LABEL = "extra_duration_label"
+        const val EXTRA_SCHEDULE_NAME = "extra_schedule_name"
 
         fun intent(
             context: Context,
@@ -58,12 +64,14 @@ class BlockedAppActivity : ComponentActivity() {
             appLabel: String,
             blockedUntilEpochMs: Long,
             durationLabel: String,
+            scheduleName: String?,
         ): Intent = Intent(context, BlockedAppActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_PACKAGE_NAME, packageName)
             putExtra(EXTRA_APP_LABEL, appLabel)
             putExtra(EXTRA_BLOCKED_UNTIL_MS, blockedUntilEpochMs)
             putExtra(EXTRA_DURATION_LABEL, durationLabel)
+            if (scheduleName != null) putExtra(EXTRA_SCHEDULE_NAME, scheduleName)
         }
     }
 }
