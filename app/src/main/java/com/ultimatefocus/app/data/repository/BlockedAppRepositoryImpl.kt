@@ -14,14 +14,15 @@ import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.BlockedApp
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import com.ultimatefocus.app.domain.service.Clock
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Duration.Companion.milliseconds
 
 @Singleton
 class BlockedAppRepositoryImpl @Inject constructor(
@@ -29,19 +30,23 @@ class BlockedAppRepositoryImpl @Inject constructor(
     private val clock: Clock,
 ) : BlockedAppRepository {
 
+    // Ticker re-evaluates clock.now() per minute so expired blocks drop out of
+    // observers without waiting for an unrelated row write to invalidate Room.
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeActiveBlocks(): Flow<List<BlockedApp>> =
-        flowOf(Unit).flatMapLatest {
-            dao.observeActiveBlocks(clock.now()).map { rows ->
-                rows.map { it.toDomain() }
+        flow { while (true) { emit(Unit); delay(60_000L.milliseconds) } }
+            .flatMapLatest {
+                dao.observeActiveBlocks(clock.now()).map { rows ->
+                    rows.map { it.toDomain() }
+                }
             }
-        }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeActivePackageNames(): Flow<Set<String>> =
-        flowOf(Unit).flatMapLatest {
-            dao.observeActivePackageNames(clock.now()).map { it.toSet() }
-        }
+        flow { while (true) { emit(Unit); delay(60_000L.milliseconds) } }
+            .flatMapLatest {
+                dao.observeActivePackageNames(clock.now()).map { it.toSet() }
+            }
 
     override suspend fun isBlocked(packageName: String): Boolean =
         getBlock(packageName) != null

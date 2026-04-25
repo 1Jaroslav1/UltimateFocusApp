@@ -10,6 +10,7 @@ import com.ultimatefocus.app.data.local.dao.FakeBlockedAppDao
 import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.service.FakeClock
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -133,5 +134,22 @@ class BlockedAppRepositoryImplTest {
     fun `pruneExpired on empty table is a no-op`() = runTest {
         repo.pruneExpired() // must not throw
         assertEquals(0, dao.size)
+    }
+
+    @Test
+    fun `observeActivePackageNames re-emits empty after time advances past expiry without DB writes`() = runTest {
+        repo.block("com.a", BlockDuration.HOUR_1)
+
+        repo.observeActivePackageNames().test {
+            assertEquals(setOf("com.a"), awaitItem())
+
+            // Advance wall-clock past expiry; no row writes happen.
+            clock.current += BlockDuration.HOUR_1.millis + 1L
+            // Drive the in-flow ticker forward so the predicate is re-evaluated.
+            advanceTimeBy(60_001L)
+
+            assertEquals(emptySet<String>(), awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }
