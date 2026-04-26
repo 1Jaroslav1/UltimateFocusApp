@@ -13,9 +13,14 @@
  *                             .blockForMillis() with the original session
  *                             duration label. Closes the loop into the
  *                             existing manual-block pipeline.
- *  - ShowReminderOnly       → Toast — copy is "You spent N min in <App>"
- *                             so the popup carries the AC's "how much
- *                             time was spent" information.
+ *  - ShowReminderOnly       → Toast at expiry, then a recurring 5-minute
+ *                             reminder loop showing accumulated time
+ *                             ("You spent N min in <App>") until the user
+ *                             starts a different session for any package
+ *                             (or the process dies). The session record
+ *                             is intentionally NOT cleared here — the
+ *                             loop watches `coordinator.active` to know
+ *                             when the user has moved on.
  *
  * Started from UltimateFocusApp.onCreate so dispatch is process-lifetime
  * — independent of whether the AccessibilityService is currently
@@ -33,6 +38,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
+import com.ultimatefocus.app.domain.model.ActiveSession
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import com.ultimatefocus.app.domain.service.SessionExpiryEffect
 import com.ultimatefocus.app.domain.service.SessionExpiryWatcher
@@ -103,13 +109,61 @@ class SessionExpiryRunner @Inject constructor(
                 coordinator.endSession()
             }
             is SessionExpiryEffect.ShowReminderOnly -> {
+                // Snapshot the session at expiry. We deliberately do NOT
+                // call endSession() — the repeating loop checks
+                // coordinator.active to know when the user has moved on
+                // (started a different session for any package), at which
+                // point the loop ends and the residual session record is
+                // cleaned up.
+                val expiredSession = coordinator.active.value ?: return
                 val target = effect.appLabel.ifBlank { "this app" }
-                val text = "You spent ${effect.minutesSpent} min in $target"
-                mainHandler.post {
-                    Toast.makeText(context, text, Toast.LENGTH_LONG).show()
-                }
-                coordinator.endSession()
+                showSpentToast(target, effect.minutesSpent)
+                runRepeatingReminder(expiredSession, target)
             }
+        }
+    }
+
+    /**
+     * Fires a "You spent N min in <App>" toast every REMINDER_REPEAT_MS,
+     * with N being cumulative wall-clock minutes since the original
+     * session start. Stops on:
+     *  - the user starting a different session (any package), OR
+     *  - hitting MAX_REPEAT_TICKS (capped so a forgotten session in a
+     *    backgrounded launcher does not fire toasts indefinitely).
+     *
+     * Suspends inside the dispatcher coroutine so cancellation
+     * propagates from the parent scope on process death.
+     */
+    private suspend fun runRepeatingReminder(
+        expiredSession: ActiveSession,
+        targetLabel: String,
+    ) {
+        var ticks = 0
+        while (ticks < MAX_REPEAT_TICKS) {
+            delay(REMINDER_REPEAT_MS)
+            val current = coordinator.active.value
+            if (current?.startedEpochMs != expiredSession.startedEpochMs) {
+                // Different (or no) session — user moved on.
+                return
+            }
+            ticks++
+            val cumulativeMinutes =
+                ((System.currentTimeMillis() - expiredSession.startedEpochMs) / 60_000L)
+                    .toInt()
+                    .coerceAtLeast(expiredSession.durationMinutes)
+            showSpentToast(targetLabel, cumulativeMinutes)
+        }
+        // Hit the cap — clear the residual session so subsequent launches
+        // re-prompt the picker.
+        if (coordinator.active.value?.startedEpochMs == expiredSession.startedEpochMs) {
+            coordinator.endSession()
+        }
+    }
+
+    private fun showSpentToast(targetLabel: String, minutes: Int) {
+        val text = "You spent $minutes min in $targetLabel"
+        mainHandler.post {
+            Toast.makeText(context, text, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -122,5 +176,21 @@ class SessionExpiryRunner @Inject constructor(
          * the user doesn't see a flicker.
          */
         const val OVERLAY_HANDOFF_DELAY_MS: Long = 300L
+
+        /**
+         * Cadence of the Mode 4 (ONLY_REMINDER) repeating popup after the
+         * initial session-end toast. The user keeps getting nudged with
+         * cumulative time spent until they consciously start a new session.
+         */
+        const val REMINDER_REPEAT_MS: Long = 5L * 60L * 1_000L
+
+        /**
+         * Cap on how many post-expiry toasts will fire for a single
+         * Mode 4 session. 11 ticks × 5 min = 55 min of nudges past
+         * expiry, which keeps things bounded if the user navigates away
+         * without consciously ending the session (we have no foreground
+         * signal here to detect that).
+         */
+        const val MAX_REPEAT_TICKS: Int = 11
     }
 }

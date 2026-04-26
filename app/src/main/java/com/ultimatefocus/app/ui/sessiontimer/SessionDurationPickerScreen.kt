@@ -165,6 +165,7 @@ fun SessionDurationPickerContent(
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                     )
+                    Spacer(modifier = Modifier.height(MODE_ROW_GAP))
                     ExpiryModeRadioGroup(
                         selected = state.selectedMode,
                         onSelect = onSelectMode,
@@ -172,14 +173,13 @@ fun SessionDurationPickerContent(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.fillMaxWidth(),
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("session_picker_cancel_button"),
                 ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.testTag("session_picker_cancel_button"),
-                    ) { Text("Cancel") }
+                    Text(text = "Cancel", textAlign = TextAlign.Center)
                 }
             }
         }
@@ -215,9 +215,12 @@ private fun PresetGrid(onConfirm: (Int) -> Unit) {
 
 @Composable
 private fun PresetButton(minutes: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    // contentPadding horizontal trimmed from 12dp → 8dp (~33% off) so
+    // the button text sits closer to the border and the buttons feel
+    // less padded in the modal.
     OutlinedButton(
         onClick = onClick,
-        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 12.dp),
+        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 8.dp),
         border = BorderStroke(1.dp, Color.White),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = Color.Transparent,
@@ -252,7 +255,7 @@ private fun CustomMinutesField(
             onValueChange = onValueChange,
             placeholder = {
                 Text(
-                    text = "min",
+                    text = "min (max 240)",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
@@ -288,31 +291,43 @@ private fun ExpiryModeRadioGroup(
     selected: SessionExpiryMode,
     onSelect: (SessionExpiryMode) -> Unit,
 ) {
-    PICKER_OPTIONS.forEach { option ->
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onSelect(option.mode) }
-                .padding(vertical = 6.dp)
-                .testTag("session_picker_mode_${option.mode.name}"),
-        ) {
-            RadioButton(
-                selected = selected == option.mode,
-                onClick = { onSelect(option.mode) },
-            )
-            Text(
-                text = option.title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(start = 8.dp),
-            )
+    // Single Column with Arrangement.spacedBy so the gap between mode
+    // rows is exactly MODE_ROW_GAP — and matches the Spacer between the
+    // "Behavior when this session ends" label and the first row.
+    Column(verticalArrangement = Arrangement.spacedBy(MODE_ROW_GAP)) {
+        PICKER_OPTIONS.forEach { option ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(option.mode) }
+                    .testTag("session_picker_mode_${option.mode.name}"),
+            ) {
+                RadioButton(
+                    selected = selected == option.mode,
+                    onClick = { onSelect(option.mode) },
+                )
+                Text(
+                    text = option.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
         }
     }
 }
 
 private fun labelFor(mode: SessionExpiryMode): String =
     PICKER_OPTIONS.firstOrNull { it.mode == mode }?.title ?: mode.name
+
+/**
+ * Gap used in two places: the Spacer between the "Behavior when this
+ * session ends" label and the first radio row, and the
+ * Arrangement.spacedBy between adjacent radio rows. Pulled into a
+ * constant so the two stay locked together.
+ */
+private val MODE_ROW_GAP = 6.dp
 
 private data class PickerExpiryOption(val mode: SessionExpiryMode, val title: String)
 
