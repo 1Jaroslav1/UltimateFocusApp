@@ -245,7 +245,7 @@ private fun ExpiryModeRadioGroup(
     selected: SessionExpiryMode,
     onSelect: (SessionExpiryMode) -> Unit,
 ) {
-    OPTIONS.forEach { option ->
+    PICKER_OPTIONS.forEach { option ->
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -268,11 +268,11 @@ private fun ExpiryModeRadioGroup(
     }
 }
 
-private data class ExpiryOption(val mode: SessionExpiryMode, val title: String)
+private data class PickerExpiryOption(val mode: SessionExpiryMode, val title: String)
 
-private val OPTIONS = listOf(
-    ExpiryOption(SessionExpiryMode.MINDFUL_EXTENSION_DELAY, "Mindful extension delay"),
-    ExpiryOption(SessionExpiryMode.EXIT_APP, "Exit app when time is over"),
-    ExpiryOption(SessionExpiryMode.EXIT_AND_BLOCK, "Exit app and block"),
-    ExpiryOption(SessionExpiryMode.ONLY_REMINDER, "Only reminder"),
+private val PICKER_OPTIONS = listOf(
+    PickerExpiryOption(SessionExpiryMode.MINDFUL_EXTENSION_DELAY, "Mindful extension delay"),
+    PickerExpiryOption(SessionExpiryMode.EXIT_APP, "Exit app when time is over"),
+    PickerExpiryOption(SessionExpiryMode.EXIT_AND_BLOCK, "Exit app and block"),
+    PickerExpiryOption(SessionExpiryMode.ONLY_REMINDER, "Only reminder"),
 )

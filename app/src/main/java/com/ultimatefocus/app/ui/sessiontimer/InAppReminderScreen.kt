@@ -386,29 +386,29 @@ private fun SettingsRow(
     }
 }
 
-private data class ExpiryOption(
+private data class ReminderExpiryOption(
     val mode: SessionExpiryMode,
     val title: String,
     val subtitle: String,
 )
 
 private val EXPIRY_OPTIONS = listOf(
-    ExpiryOption(
+    ReminderExpiryOption(
         mode = SessionExpiryMode.MINDFUL_EXTENSION_DELAY,
         title = "Mindful extension delay",
         subtitle = "Force a short wait before allowing a session extension.",
     ),
-    ExpiryOption(
+    ReminderExpiryOption(
         mode = SessionExpiryMode.EXIT_APP,
         title = "Exit app when time is over",
         subtitle = "Automatically return to the home screen when the timer hits zero.",
     ),
-    ExpiryOption(
+    ReminderExpiryOption(
         mode = SessionExpiryMode.EXIT_AND_BLOCK,
         title = "Exit app and block",
         subtitle = "Close the app and block it for the same duration just used.",
     ),
-    ExpiryOption(
+    ReminderExpiryOption(
         mode = SessionExpiryMode.ONLY_REMINDER,
         title = "Only reminder",
         subtitle = "Show a notification — take no automatic action.",
