@@ -1,6 +1,7 @@
 /**
- * Settings → "In-App Reminder" landing page. Top-down layout per the
- * ULT-76 acceptance criteria:
+ * Settings → "In-App Reminder" landing page.
+ *
+ * Top-down layout per the ULT-76 / ULT-77 acceptance criteria:
  *  1. Top bar with back arrow and title.
  *  2. Master switch — "In-app time reminder active". When OFF, every
  *     control below greys out (alpha 0.4) and is disabled. The greying
@@ -11,18 +12,26 @@
  *     is owned by US-2.4.2; here we only persist the flag.)
  *  4. Mindful Launch Delay switch.
  *  5. Behavior-mode radio group (4 options) with explanatory subtitles.
- *  6. App list (added by ULT-77).
+ *  6. App-list section (ULT-77): an AppFilterField (shared with
+ *     AppBrowseSheet, satisfying "same component as all-apps search")
+ *     plus a vertically-scrolling per-app list. Each row has the app
+ *     label and a Switch whose state mirrors the per-app opt-in. When
+ *     master is OFF the toggles are disabled and visually inert; the
+ *     filter text field continues to function so the user can still
+ *     audit the current set.
  *
  * Split into a Hilt-bound entry (`InAppReminderScreen`) and a stateless
  * `InAppReminderContent` so Compose-rule tests can drive the UI without
  * spinning up a ViewModel.
  *
- * Covers: ULT-76
+ * Covers: ULT-76, ULT-77
  */
 package com.ultimatefocus.app.ui.sessiontimer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,11 +39,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.HorizontalDivider
@@ -51,43 +61,49 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ultimatefocus.app.domain.model.InAppReminderSettings
 import com.ultimatefocus.app.domain.model.SessionExpiryMode
+import com.ultimatefocus.app.ui.components.AppFilterField
 
 @Composable
 fun InAppReminderScreen(
     onNavigateBack: () -> Unit,
     viewModel: InAppReminderViewModel = hiltViewModel(),
 ) {
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     InAppReminderContent(
-        settings = settings,
+        state = state,
         onNavigateBack = onNavigateBack,
         onSetMaster = viewModel::setMasterEnabled,
         onTogglePrecision = viewModel::togglePrecisionMode,
         onSetMindfulLaunchDelay = viewModel::setMindfulLaunchDelay,
         onSelectExpiryMode = viewModel::setExpiryMode,
+        onQueryChange = viewModel::setQuery,
+        onAppToggle = viewModel::setAppEnabled,
     )
 }
 
 @Composable
 fun InAppReminderContent(
-    settings: InAppReminderSettings,
+    state: InAppReminderUiState,
     onNavigateBack: () -> Unit,
     onSetMaster: (Boolean) -> Unit,
     onTogglePrecision: () -> Unit,
     onSetMindfulLaunchDelay: (Boolean) -> Unit,
     onSelectExpiryMode: (SessionExpiryMode) -> Unit,
+    onQueryChange: (String) -> Unit,
+    onAppToggle: (String, Boolean) -> Unit,
 ) {
+    val settings = state.settings
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState())
             .testTag("in_app_reminder_screen"),
     ) {
         TopBar(onNavigateBack = onNavigateBack)
@@ -141,7 +157,108 @@ fun InAppReminderContent(
             HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
         }
 
+        SectionHeader("Apps")
+        AppFilterField(
+            query = state.query,
+            onQueryChange = onQueryChange,
+            testTag = "in_app_reminder_filter_field",
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        AppList(
+            visibleApps = state.visibleApps,
+            totalAppCount = state.totalAppCount,
+            masterEnabled = settings.masterEnabled,
+            onToggle = onAppToggle,
+        )
+
         Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun AppList(
+    visibleApps: List<AppToggleRow>,
+    totalAppCount: Int,
+    masterEnabled: Boolean,
+    onToggle: (String, Boolean) -> Unit,
+) {
+    if (totalAppCount == 0) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 120.dp)
+                .padding(horizontal = 32.dp, vertical = 16.dp)
+                .testTag("in_app_reminder_apps_loading"),
+        ) {
+            Text(
+                text = "Loading apps…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+        return
+    }
+    if (visibleApps.isEmpty()) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 120.dp)
+                .padding(horizontal = 32.dp, vertical = 16.dp)
+                .testTag("in_app_reminder_apps_empty"),
+        ) {
+            Text(
+                text = "No apps match your search.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+        return
+    }
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 120.dp, max = 480.dp)
+            .alpha(if (masterEnabled) 1f else DISABLED_ALPHA)
+            .testTag("in_app_reminder_apps_list"),
+    ) {
+        items(visibleApps, key = { it.packageName }) { row ->
+            AppRow(row = row, masterEnabled = masterEnabled, onToggle = onToggle)
+        }
+    }
+}
+
+@Composable
+private fun AppRow(
+    row: AppToggleRow,
+    masterEnabled: Boolean,
+    onToggle: (String, Boolean) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 12.dp)
+            .testTag("in_app_reminder_app_row_${row.packageName}"),
+    ) {
+        Text(
+            text = row.label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(
+            checked = row.enabled,
+            enabled = masterEnabled,
+            onCheckedChange = { onToggle(row.packageName, it) },
+            modifier = Modifier.testTag("in_app_reminder_app_switch_${row.packageName}"),
+        )
     }
 }
 

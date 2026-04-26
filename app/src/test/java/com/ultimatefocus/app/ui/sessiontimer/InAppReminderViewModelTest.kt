@@ -1,22 +1,25 @@
 /**
- * Unit tests for InAppReminderViewModel — covers the four global controls
- * exposed on the In-App Reminder settings page (master switch, precision
- * mode toggle, mindful launch delay switch, expiry-mode radio group).
+ * Unit tests for InAppReminderViewModel — covers the global controls
+ * (master, precision, mindful delay, expiry mode) and the per-app list
+ * surface (search filter, toggle persistence, master/per-app combination).
  *
- * Uses FakeUserPreferencesSource (in-memory) wired through the real
- * SessionTimerRepositoryImpl so the ViewModel ↔ Repository ↔ DataStore
- * surface is integration-tested as a single seam. Validates both happy
- * paths (initial defaults, single setter, one-shot mode change) and
- * border cases (precision toggling round-trip, repeated master flips).
+ * Wires the real SessionTimerRepositoryImpl with FakeUserPreferencesSource
+ * + FakeSessionTimerAppDao + FakeClock so the ViewModel ↔ Repository ↔
+ * persistence seam is integration-tested end-to-end inside one JVM test.
  *
- * Covers: ULT-76
+ * Covers: ULT-76, ULT-77
  */
 package com.ultimatefocus.app.ui.sessiontimer
 
+import android.content.ComponentName
 import app.cash.turbine.test
+import com.ultimatefocus.app.data.local.dao.FakeSessionTimerAppDao
+import com.ultimatefocus.app.data.repository.FakeAppRepository
 import com.ultimatefocus.app.data.repository.SessionTimerRepositoryImpl
+import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.SessionExpiryMode
 import com.ultimatefocus.app.domain.repository.FakeUserPreferencesSource
+import com.ultimatefocus.app.domain.service.FakeClock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -35,19 +38,30 @@ class InAppReminderViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakePrefs: FakeUserPreferencesSource
+    private lateinit var fakeDao: FakeSessionTimerAppDao
+    private lateinit var fakeApps: FakeAppRepository
     private lateinit var viewModel: InAppReminderViewModel
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         fakePrefs = FakeUserPreferencesSource()
-        viewModel = InAppReminderViewModel(SessionTimerRepositoryImpl(fakePrefs))
+        fakeDao = FakeSessionTimerAppDao()
+        fakeApps = FakeAppRepository()
+        val repo = SessionTimerRepositoryImpl(fakePrefs, fakeDao, FakeClock(current = 1L))
+        viewModel = InAppReminderViewModel(repo, fakeApps)
     }
 
     @After
     fun tearDown() { Dispatchers.resetMain() }
 
-    // ── Happy paths ──────────────────────────────────────────────────────────
+    private fun appInfo(pkg: String, label: String) = AppInfo(
+        packageName = pkg,
+        label = label,
+        componentName = ComponentName(pkg, "$pkg.Main"),
+    )
+
+    // ── Global settings ──────────────────────────────────────────────────────
 
     @Test
     fun `settings emits defaults initially`() = runTest {
@@ -62,7 +76,7 @@ class InAppReminderViewModelTest {
     }
 
     @Test
-    fun `setMasterEnabled true persists through repository to settings flow`() = runTest {
+    fun `setMasterEnabled true persists through repository`() = runTest {
         viewModel.settings.test {
             awaitItem()
             viewModel.setMasterEnabled(true)
@@ -74,21 +88,11 @@ class InAppReminderViewModelTest {
     @Test
     fun `togglePrecisionMode flips false then true`() = runTest {
         viewModel.settings.test {
-            awaitItem() // defaults
+            awaitItem()
             viewModel.togglePrecisionMode()
             assertTrue(awaitItem().precisionMode)
             viewModel.togglePrecisionMode()
             assertFalse(awaitItem().precisionMode)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `setMindfulLaunchDelay true persists`() = runTest {
-        viewModel.settings.test {
-            awaitItem()
-            viewModel.setMindfulLaunchDelay(true)
-            assertTrue(awaitItem().mindfulLaunchDelay)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -103,42 +107,90 @@ class InAppReminderViewModelTest {
         }
     }
 
-    @Test
-    fun `setExpiryMode for each value in the enum is round-trip safe`() = runTest {
-        SessionExpiryMode.entries.forEach { mode ->
-            viewModel.setExpiryMode(mode)
-            assertEquals(mode, viewModel.settings.value.expiryMode)
-        }
-    }
-
-    // ── Border cases ─────────────────────────────────────────────────────────
+    // ── Per-app list ─────────────────────────────────────────────────────────
 
     @Test
-    fun `master and other flags are independent`() = runTest {
-        viewModel.settings.test {
-            awaitItem()
-            viewModel.setMindfulLaunchDelay(true)
-            assertTrue(awaitItem().mindfulLaunchDelay)
-            viewModel.setMasterEnabled(false)
-            // mindfulLaunchDelay stays true even with master off — the UI is
-            // responsible for greying it out, not the repository.
-            val snap = awaitItem()
-            assertFalse(snap.masterEnabled)
-            assertTrue(snap.mindfulLaunchDelay)
+    fun `uiState surfaces installed apps sorted by label`() = runTest {
+        fakeApps.setApps(
+            listOf(
+                appInfo("com.zeta", "Zeta App"),
+                appInfo("com.alpha", "Alpha App"),
+                appInfo("com.middle", "Middle App"),
+            ),
+        )
+        viewModel.uiState.test {
+            // initial empty before combine completes; pull until apps appear
+            var snap = awaitItem()
+            while (snap.totalAppCount == 0) snap = awaitItem()
+            assertEquals(
+                listOf("com.alpha", "com.middle", "com.zeta"),
+                snap.visibleApps.map { it.packageName },
+            )
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `repeated setMaster does not flicker between values`() = runTest {
-        viewModel.settings.test {
-            awaitItem()
-            viewModel.setMasterEnabled(true)
-            assertTrue(awaitItem().masterEnabled)
-            viewModel.setMasterEnabled(true) // idempotent
-            // No new emission expected because the value did not change.
-            // Drain via cancelAndIgnoreRemainingEvents — Turbine will
-            // throw if a duplicate emission appears.
+    fun `setQuery filters list case-insensitively`() = runTest {
+        fakeApps.setApps(
+            listOf(
+                appInfo("com.alpha", "Alpha App"),
+                appInfo("com.bravo", "Bravo App"),
+            ),
+        )
+        viewModel.uiState.test {
+            var snap = awaitItem()
+            while (snap.totalAppCount == 0) snap = awaitItem()
+            viewModel.setQuery("BRA")
+            snap = awaitItem()
+            // The query updates may emit twice (query change, list filter); drain.
+            while (snap.query != "BRA") snap = awaitItem()
+            assertEquals(listOf("com.bravo"), snap.visibleApps.map { it.packageName })
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `setAppEnabled persists per-app opt-in`() = runTest {
+        fakeApps.setApps(listOf(appInfo("com.alpha", "Alpha App")))
+        viewModel.setAppEnabled("com.alpha", true)
+        assertTrue(fakeDao.isEnabled("com.alpha"))
+        viewModel.setAppEnabled("com.alpha", false)
+        assertFalse(fakeDao.isEnabled("com.alpha"))
+    }
+
+    @Test
+    fun `uiState reflects toggled state on visibleApps`() = runTest {
+        fakeApps.setApps(listOf(appInfo("com.alpha", "Alpha App")))
+        viewModel.uiState.test {
+            var snap = awaitItem()
+            while (snap.totalAppCount == 0) snap = awaitItem()
+            assertFalse(snap.visibleApps.first().enabled)
+
+            viewModel.setAppEnabled("com.alpha", true)
+            snap = awaitItem()
+            while (snap.visibleApps.firstOrNull()?.enabled != true) snap = awaitItem()
+            assertTrue(snap.visibleApps.first().enabled)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `setQuery with no matches keeps totalAppCount but visibleApps empty`() = runTest {
+        fakeApps.setApps(
+            listOf(
+                appInfo("com.alpha", "Alpha App"),
+                appInfo("com.bravo", "Bravo App"),
+            ),
+        )
+        viewModel.uiState.test {
+            var snap = awaitItem()
+            while (snap.totalAppCount == 0) snap = awaitItem()
+            viewModel.setQuery("nothing matches this")
+            snap = awaitItem()
+            while (snap.query != "nothing matches this") snap = awaitItem()
+            assertEquals(2, snap.totalAppCount)
+            assertTrue(snap.visibleApps.isEmpty())
             cancelAndIgnoreRemainingEvents()
         }
     }

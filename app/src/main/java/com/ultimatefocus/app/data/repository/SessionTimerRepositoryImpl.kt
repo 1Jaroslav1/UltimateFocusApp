@@ -7,20 +7,26 @@
  * pattern of binding feature-flag UI directly against the Flow rather than
  * caching values inside the ViewModel.
  *
- * Per-app opt-in is added by ULT-77 (Room-backed). Until that commit lands,
- * the per-app surface is a no-op so the settings page can render the global
- * controls without forcing an empty-set Room query path.
+ * Per-app opt-in (ULT-77) is backed by Room (SessionTimerAppDao). The
+ * AccessibilityService caches the package set in memory so foreground
+ * transitions stay on the hot path; this repo is the single writer.
  *
- * Covers: ULT-76
+ * isReminderActiveFor combines master + per-app — the launch interceptor
+ * uses it to decide whether to surface the duration picker.
+ *
+ * Covers: ULT-76, ULT-77
  */
 package com.ultimatefocus.app.data.repository
 
+import com.ultimatefocus.app.data.local.dao.SessionTimerAppDao
+import com.ultimatefocus.app.data.local.entity.SessionTimerAppEntity
 import com.ultimatefocus.app.domain.model.InAppReminderSettings
 import com.ultimatefocus.app.domain.model.SessionExpiryMode
 import com.ultimatefocus.app.domain.repository.SessionTimerRepository
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
+import com.ultimatefocus.app.domain.service.Clock
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,6 +34,8 @@ import javax.inject.Singleton
 @Singleton
 class SessionTimerRepositoryImpl @Inject constructor(
     private val preferencesSource: UserPreferencesSource,
+    private val dao: SessionTimerAppDao,
+    private val clock: Clock,
 ) : SessionTimerRepository {
 
     override fun observeSettings(): Flow<InAppReminderSettings> =
@@ -56,12 +64,24 @@ class SessionTimerRepositoryImpl @Inject constructor(
         preferencesSource.updateInAppReminderExpiryMode(mode)
     }
 
-    // Per-app surface is wired up in ULT-77. Stubs below keep the feature
-    // graph coherent so the global-only settings page (ULT-76) compiles and
-    // ships independently of the per-app list rollout.
-    override fun observeEnabledPackages(): Flow<Set<String>> = flowOf(emptySet())
+    override fun observeEnabledPackages(): Flow<Set<String>> =
+        dao.observePackages().map { it.toSet() }
 
-    override suspend fun isReminderActiveFor(packageName: String): Boolean = false
+    override suspend fun isReminderActiveFor(packageName: String): Boolean {
+        if (!preferencesSource.preferences.first().inAppReminderMasterEnabled) return false
+        return dao.isEnabled(packageName)
+    }
 
-    override suspend fun setEnabled(packageName: String, enabled: Boolean) = Unit
+    override suspend fun setEnabled(packageName: String, enabled: Boolean) {
+        if (enabled) {
+            dao.upsert(
+                SessionTimerAppEntity(
+                    packageName = packageName,
+                    addedEpochMs = clock.now(),
+                ),
+            )
+        } else {
+            dao.deleteByPackage(packageName)
+        }
+    }
 }

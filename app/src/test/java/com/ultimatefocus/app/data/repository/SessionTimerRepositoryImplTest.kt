@@ -1,16 +1,19 @@
 /**
- * Unit tests for SessionTimerRepositoryImpl global-settings surface.
- * Backed by FakeUserPreferencesSource (in-memory). Per-app behavior is
- * covered separately when ULT-77 lands the Room-backed surface.
+ * Unit tests for SessionTimerRepositoryImpl. Covers the global settings
+ * surface (ULT-76) and the per-app opt-in surface (ULT-77). Backed by
+ * FakeUserPreferencesSource + FakeSessionTimerAppDao + FakeClock so the
+ * tests are pure JVM and deterministic.
  *
- * Covers: ULT-76
+ * Covers: ULT-76, ULT-77
  */
 package com.ultimatefocus.app.data.repository
 
 import app.cash.turbine.test
+import com.ultimatefocus.app.data.local.dao.FakeSessionTimerAppDao
 import com.ultimatefocus.app.domain.model.InAppReminderSettings
 import com.ultimatefocus.app.domain.model.SessionExpiryMode
 import com.ultimatefocus.app.domain.repository.FakeUserPreferencesSource
+import com.ultimatefocus.app.domain.service.FakeClock
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -23,13 +26,19 @@ import org.junit.Test
 class SessionTimerRepositoryImplTest {
 
     private lateinit var prefs: FakeUserPreferencesSource
+    private lateinit var dao: FakeSessionTimerAppDao
+    private lateinit var clock: FakeClock
     private lateinit var repo: SessionTimerRepositoryImpl
 
     @Before
     fun setUp() {
         prefs = FakeUserPreferencesSource()
-        repo = SessionTimerRepositoryImpl(prefs)
+        dao = FakeSessionTimerAppDao()
+        clock = FakeClock(current = 1_000L)
+        repo = SessionTimerRepositoryImpl(prefs, dao, clock)
     }
+
+    // ── Global settings ──────────────────────────────────────────────────────
 
     @Test
     fun `defaults match documented values`() = runTest {
@@ -80,15 +89,76 @@ class SessionTimerRepositoryImplTest {
         }
     }
 
+    // ── Per-app opt-in ───────────────────────────────────────────────────────
+
     @Test
-    fun `per-app stub returns empty until ULT-77 wires Room`() = runTest {
+    fun `setEnabled true upserts package into dao`() = runTest {
+        repo.setEnabled("com.example.alpha", true)
+        assertTrue(dao.isEnabled("com.example.alpha"))
+        assertEquals(1, dao.size)
+    }
+
+    @Test
+    fun `setEnabled false removes package`() = runTest {
+        repo.setEnabled("com.example.alpha", true)
+        repo.setEnabled("com.example.alpha", false)
+        assertFalse(dao.isEnabled("com.example.alpha"))
+        assertEquals(0, dao.size)
+    }
+
+    @Test
+    fun `observeEnabledPackages emits set of package names`() = runTest {
         repo.observeEnabledPackages().test {
             assertTrue(awaitItem().isEmpty())
+            repo.setEnabled("com.a", true)
+            assertEquals(setOf("com.a"), awaitItem())
+            repo.setEnabled("com.b", true)
+            assertEquals(setOf("com.a", "com.b"), awaitItem())
+            repo.setEnabled("com.a", false)
+            assertEquals(setOf("com.b"), awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
-        assertFalse(repo.isReminderActiveFor("com.example.any"))
-        // setEnabled is a no-op in the global-only build.
-        repo.setEnabled("com.example.any", true)
-        assertFalse(repo.isReminderActiveFor("com.example.any"))
+    }
+
+    @Test
+    fun `isReminderActiveFor returns false when master is off even if app opted in`() = runTest {
+        repo.setEnabled("com.a", true)
+        // master defaults off
+        assertFalse(repo.isReminderActiveFor("com.a"))
+    }
+
+    @Test
+    fun `isReminderActiveFor returns false when app not opted in even if master on`() = runTest {
+        repo.updateMasterEnabled(true)
+        assertFalse(repo.isReminderActiveFor("com.never.added"))
+    }
+
+    @Test
+    fun `isReminderActiveFor returns true when master on and app opted in`() = runTest {
+        repo.updateMasterEnabled(true)
+        repo.setEnabled("com.a", true)
+        assertTrue(repo.isReminderActiveFor("com.a"))
+    }
+
+    @Test
+    fun `setEnabled is idempotent`() = runTest {
+        repo.setEnabled("com.a", true)
+        repo.setEnabled("com.a", true)
+        assertEquals(1, dao.size)
+        repo.setEnabled("com.a", false)
+        repo.setEnabled("com.a", false)
+        assertEquals(0, dao.size)
+    }
+
+    @Test
+    fun `setEnabled records addedEpochMs from clock`() = runTest {
+        clock.current = 999_999L
+        repo.setEnabled("com.a", true)
+        // Validate via the observable list — addedEpochMs is preserved on the
+        // entity round-trip (FakeDao stores the entity).
+        repo.observeEnabledPackages().test {
+            assertEquals(setOf("com.a"), awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }

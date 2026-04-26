@@ -12,7 +12,7 @@
  * Also binds SessionTimerRepository — the In-App Reminder feature surface
  * (global feature flags + per-app opt-in) — so the settings page and the
  * launch interceptors share a single source of truth.
- * Covers: ULT-5, ULT-16, ULT-17, ULT-18, ULT-20, ULT-24, ULT-72, ULT-73, ULT-75, ULT-76
+ * Covers: ULT-5, ULT-16, ULT-17, ULT-18, ULT-20, ULT-24, ULT-72, ULT-73, ULT-75, ULT-76, ULT-77
  */
 package com.ultimatefocus.app.di
 
@@ -24,6 +24,7 @@ import com.ultimatefocus.app.data.local.dao.BlockedAppDao
 import com.ultimatefocus.app.data.local.dao.BlockedTagDao
 import com.ultimatefocus.app.data.local.dao.BlockingScheduleDao
 import com.ultimatefocus.app.data.local.dao.FavoriteDao
+import com.ultimatefocus.app.data.local.dao.SessionTimerAppDao
 import com.ultimatefocus.app.data.local.dao.TagDao
 import com.ultimatefocus.app.data.preferences.UserPreferencesDataStore
 import com.ultimatefocus.app.data.repository.AppRepository
@@ -84,6 +85,10 @@ object DatabaseModule {
 
     @Provides
     fun provideBlockedTagDao(database: AppDatabase): BlockedTagDao = database.blockedTagDao()
+
+    @Provides
+    fun provideSessionTimerAppDao(database: AppDatabase): SessionTimerAppDao =
+        database.sessionTimerAppDao()
 }
 
 @Module
