@@ -102,6 +102,18 @@ fun AppDrawerScreen(
             )
         }
     }
+    LaunchedEffect(Unit) {
+        viewModel.sessionPicker.collect { event ->
+            launchContext.startActivity(
+                com.ultimatefocus.app.ui.sessiontimer.SessionDurationPickerActivity.intent(
+                    context = launchContext,
+                    packageName = event.packageName,
+                    appLabel = event.appLabel,
+                    defaultMode = event.defaultMode,
+                ),
+            )
+        }
+    }
 
     LaunchedEffect(autoKeyboard, isActive) {
         if (autoKeyboard && isActive && !selectionState.active) {

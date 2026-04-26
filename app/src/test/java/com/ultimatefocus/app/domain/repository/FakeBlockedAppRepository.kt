@@ -3,7 +3,7 @@
  * internal map directly via blockedPackages, or exercise the full
  * block(packageName, duration) flow. Uses an injected FakeClock so
  * expiry checks are deterministic.
- * Covers: ULT-20, ULT-21, ULT-22
+ * Covers: ULT-20, ULT-21, ULT-22, ULT-81
  */
 package com.ultimatefocus.app.domain.repository
 
@@ -48,12 +48,20 @@ class FakeBlockedAppRepository(
     }
 
     override suspend fun block(packageName: String, duration: BlockDuration) {
+        blockForMillis(packageName, duration.millis, duration.label)
+    }
+
+    override suspend fun blockForMillis(
+        packageName: String,
+        durationMillis: Long,
+        label: String,
+    ) {
         val now = clock.now()
         val next = BlockedApp(
             packageName = packageName,
-            blockedUntilEpochMs = now + duration.millis,
+            blockedUntilEpochMs = now + durationMillis,
             blockedSinceEpochMs = now,
-            durationLabel = duration.label,
+            durationLabel = label,
         )
         _blocks.value = _blocks.value + (packageName to next)
     }

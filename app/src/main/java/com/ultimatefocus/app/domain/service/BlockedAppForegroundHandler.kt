@@ -1,12 +1,21 @@
 /**
  * Pure-logic helper behind BlockedAppAccessibilityService. Given a foreground
- * package name, the current clock, and the set of actively blocked packages,
- * decides whether to (a) push the user to the blocked reminder or (b) ignore.
+ * package name, the current clock, the set of actively blocked packages,
+ * and the set of reminder-enabled packages, decides whether to (a) push the
+ * user to the blocked reminder, (b) push them through the session-duration
+ * picker (ULT-78), or (c) ignore.
+ *
  * Tracks a per-package debounce window so the same package doesn't re-fire
  * on every transient child window during dismissal.
+ *
  * Factored out of the AccessibilityService so the decision rule is
  * unit-testable without booting the system-bound service lifecycle.
- * Covers: ULT-20, ULT-21
+ *
+ * Manual/scheduled/tag blocks take priority over the session picker — if a
+ * package is BOTH actively blocked AND opted-in to the reminder, we want
+ * the user to see the block, not be allowed to commit a session.
+ *
+ * Covers: ULT-20, ULT-21, ULT-78
  */
 package com.ultimatefocus.app.domain.service
 
@@ -15,6 +24,7 @@ import javax.inject.Singleton
 
 sealed interface ForegroundAction {
     data class ShowBlocked(val packageName: String) : ForegroundAction
+    data class RequireSessionDuration(val packageName: String) : ForegroundAction
     data object Ignore : ForegroundAction
 }
 
@@ -29,17 +39,29 @@ class BlockedAppForegroundHandler @Inject constructor() {
         activeBlocked: Set<String>,
         ownPackage: String,
         debounceMs: Long = DEFAULT_DEBOUNCE_MS,
+        reminderEnabled: Set<String> = emptySet(),
+        sessionActiveFor: Set<String> = emptySet(),
     ): ForegroundAction {
         if (packageName.isNullOrBlank()) return ForegroundAction.Ignore
         if (packageName == ownPackage) return ForegroundAction.Ignore
         if (packageName in SYSTEM_PACKAGES) return ForegroundAction.Ignore
-        if (packageName !in activeBlocked) return ForegroundAction.Ignore
+
+        val isBlocked = packageName in activeBlocked
+        val needsPicker = packageName in reminderEnabled && packageName !in sessionActiveFor
+
+        if (!isBlocked && !needsPicker) return ForegroundAction.Ignore
 
         val last = lastFiredAt[packageName]
         if (last != null && nowMs - last < debounceMs) return ForegroundAction.Ignore
 
         lastFiredAt[packageName] = nowMs
-        return ForegroundAction.ShowBlocked(packageName)
+        // Block always wins so the user can't bypass an active block by
+        // racing through the duration picker.
+        return if (isBlocked) {
+            ForegroundAction.ShowBlocked(packageName)
+        } else {
+            ForegroundAction.RequireSessionDuration(packageName)
+        }
     }
 
     companion object {

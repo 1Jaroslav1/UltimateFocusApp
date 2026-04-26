@@ -5,7 +5,10 @@
  * reacts to changes without polling.
  * Also persists optional bottom-bar quick-access shortcut overrides (per slot) as
  * a flattened component-name + label pair; absent keys mean "use the system default".
- * Covers: ULT-6, ULT-8, ULT-13, ULT-14, ULT-16, ULT-18
+ * The In-App Reminder global flags (master / precision mode / mindful launch
+ * delay / expiry mode) live here too so the settings page binds against a
+ * single Flow<UserPreferences> projection.
+ * Covers: ULT-6, ULT-8, ULT-13, ULT-14, ULT-16, ULT-18, ULT-76
  */
 package com.ultimatefocus.app.data.preferences
 
@@ -18,6 +21,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.ultimatefocus.app.domain.model.FontSize
 import com.ultimatefocus.app.domain.model.HomeAlignment
+import com.ultimatefocus.app.domain.model.SessionExpiryMode
 import com.ultimatefocus.app.domain.model.ShortcutSlot
 import com.ultimatefocus.app.domain.model.ShortcutTarget
 import com.ultimatefocus.app.domain.model.UserPreferences
@@ -45,6 +49,12 @@ class UserPreferencesDataStore @Inject constructor(
         val LEFT_SHORTCUT_LABEL = stringPreferencesKey("left_shortcut_label")
         val RIGHT_SHORTCUT_COMPONENT = stringPreferencesKey("right_shortcut_component")
         val RIGHT_SHORTCUT_LABEL = stringPreferencesKey("right_shortcut_label")
+        val IN_APP_REMINDER_MASTER = booleanPreferencesKey("in_app_reminder_master")
+        val IN_APP_REMINDER_PRECISION_MODE =
+            booleanPreferencesKey("in_app_reminder_precision_mode")
+        val IN_APP_REMINDER_MINDFUL_LAUNCH_DELAY =
+            booleanPreferencesKey("in_app_reminder_mindful_launch_delay")
+        val IN_APP_REMINDER_EXPIRY_MODE = stringPreferencesKey("in_app_reminder_expiry_mode")
     }
 
     override val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -66,6 +76,13 @@ class UserPreferencesDataStore @Inject constructor(
                 Keys.RIGHT_SHORTCUT_COMPONENT,
                 Keys.RIGHT_SHORTCUT_LABEL,
             ),
+            inAppReminderMasterEnabled = prefs[Keys.IN_APP_REMINDER_MASTER] ?: false,
+            inAppReminderPrecisionMode = prefs[Keys.IN_APP_REMINDER_PRECISION_MODE] ?: false,
+            inAppReminderMindfulLaunchDelay =
+                prefs[Keys.IN_APP_REMINDER_MINDFUL_LAUNCH_DELAY] ?: false,
+            inAppReminderExpiryMode = prefs[Keys.IN_APP_REMINDER_EXPIRY_MODE]
+                ?.let { runCatching { SessionExpiryMode.valueOf(it) }.getOrNull() }
+                ?: SessionExpiryMode.ONLY_REMINDER,
         )
     }
 
@@ -107,6 +124,22 @@ class UserPreferencesDataStore @Inject constructor(
                 prefs[labelKey] = target.label
             }
         }
+    }
+
+    override suspend fun updateInAppReminderMasterEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.IN_APP_REMINDER_MASTER] = enabled }
+    }
+
+    override suspend fun updateInAppReminderPrecisionMode(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.IN_APP_REMINDER_PRECISION_MODE] = enabled }
+    }
+
+    override suspend fun updateInAppReminderMindfulLaunchDelay(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.IN_APP_REMINDER_MINDFUL_LAUNCH_DELAY] = enabled }
+    }
+
+    override suspend fun updateInAppReminderExpiryMode(mode: SessionExpiryMode) {
+        context.dataStore.edit { it[Keys.IN_APP_REMINDER_EXPIRY_MODE] = mode.name }
     }
 
     private fun keysFor(

@@ -3,9 +3,9 @@
  * entry, a shortcut to the system launcher selector, and a Gestures section
  * controlling the swipe-up web-search provider (ULT-16) and the
  * two-finger-double-tap-to-lock preference (ULT-18). Provides entry points to
- * the recurring blocking-schedule list (ULT-24) and the Manage Tags screen
- * (ULT-72).
- * Covers: ULT-8, ULT-16, ULT-18, ULT-24, ULT-72
+ * the recurring blocking-schedule list (ULT-24), the Manage Tags screen
+ * (ULT-72), and the In-App Reminder configuration page (ULT-76).
+ * Covers: ULT-8, ULT-16, ULT-18, ULT-24, ULT-72, ULT-76
  */
 package com.ultimatefocus.app.ui.settings
 
@@ -56,6 +56,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToBlockingSchedules: () -> Unit = {},
     onOpenManageTags: () -> Unit = {},
+    onNavigateToInAppReminder: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -202,6 +203,17 @@ fun SettingsScreen(
             subtitle = "Automatically block selected apps during recurring time windows.",
             onClick = onNavigateToBlockingSchedules,
             modifier = Modifier.testTag("blocking_schedules_row"),
+        )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
+
+        SectionHeader("Sessions")
+
+        SettingsRow(
+            title = "In-App Reminder",
+            subtitle = "Commit to a session duration before opening selected apps.",
+            onClick = onNavigateToInAppReminder,
+            modifier = Modifier.testTag("in_app_reminder_settings_row"),
         )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))

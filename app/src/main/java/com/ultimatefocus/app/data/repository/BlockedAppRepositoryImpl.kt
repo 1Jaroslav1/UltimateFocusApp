@@ -57,13 +57,21 @@ class BlockedAppRepositoryImpl @Inject constructor(
     }
 
     override suspend fun block(packageName: String, duration: BlockDuration) {
+        blockForMillis(packageName, duration.millis, duration.label)
+    }
+
+    override suspend fun blockForMillis(
+        packageName: String,
+        durationMillis: Long,
+        label: String,
+    ) {
         val now = clock.now()
         dao.upsert(
             BlockedAppEntity(
                 packageName = packageName,
-                blockedUntilEpochMs = now + duration.millis,
+                blockedUntilEpochMs = now + durationMillis,
                 blockedSinceEpochMs = now,
-                durationLabel = duration.label,
+                durationLabel = label,
             ),
         )
     }

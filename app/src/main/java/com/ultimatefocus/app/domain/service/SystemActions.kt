@@ -4,7 +4,9 @@
  * notification shade, and locking the device. Kept as an interface so the
  * home screen and its ViewModel can be exercised by unit/instrumented tests
  * with an in-memory fake.
- * Covers: ULT-16, ULT-17, ULT-18
+ * goHome() (ULT-81) returns the user to the launcher home — used by the
+ * EXIT_APP and EXIT_AND_BLOCK session-expiry behavior modes.
+ * Covers: ULT-16, ULT-17, ULT-18, ULT-81
  */
 package com.ultimatefocus.app.domain.service
 
@@ -41,4 +43,11 @@ interface SystemActions {
 
     /** Whether the launcher currently holds device-admin permission. */
     fun isLockPermissionGranted(): Boolean
+
+    /**
+     * Send the user back to the launcher home screen. Used by the EXIT_APP
+     * and EXIT_AND_BLOCK session-expiry modes to evict the user from a
+     * timed-out app (ULT-81).
+     */
+    fun goHome()
 }

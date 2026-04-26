@@ -19,6 +19,7 @@ import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.LaunchResult
+import com.ultimatefocus.app.domain.model.SessionExpiryMode
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -55,6 +56,11 @@ class AppDrawerViewModel @Inject constructor(
     private val _blockedAttempts = MutableSharedFlow<LaunchResult.Blocked>(extraBufferCapacity = 4)
     val blockedAttempts: SharedFlow<LaunchResult.Blocked> = _blockedAttempts.asSharedFlow()
 
+    private val _sessionPicker =
+        MutableSharedFlow<LaunchResult.SessionDurationRequired>(extraBufferCapacity = 4)
+    val sessionPicker: SharedFlow<LaunchResult.SessionDurationRequired> =
+        _sessionPicker.asSharedFlow()
+
     private val _selectionState = MutableStateFlow(SelectionState())
     val selectionState: StateFlow<SelectionState> = _selectionState.asStateFlow()
 
@@ -68,6 +74,19 @@ class AppDrawerViewModel @Inject constructor(
         .map { it.autoKeyboard }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    /**
+     * The user's currently-selected default expiry mode (ULT-78). Surfaced here
+     * so the duration picker activity launched from the drawer can render the
+     * configured default in its per-session override radio group.
+     */
+    val defaultExpiryMode: StateFlow<SessionExpiryMode> = preferencesSource.preferences
+        .map { it.inAppReminderExpiryMode }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            SessionExpiryMode.ONLY_REMINDER,
+        )
+
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
     }
@@ -75,7 +94,11 @@ class AppDrawerViewModel @Inject constructor(
     fun launchApp(appInfo: AppInfo) {
         viewModelScope.launch {
             val result = appRepository.launchApp(appInfo)
-            if (result is LaunchResult.Blocked) _blockedAttempts.emit(result)
+            when (result) {
+                is LaunchResult.Blocked -> _blockedAttempts.emit(result)
+                is LaunchResult.SessionDurationRequired -> _sessionPicker.emit(result)
+                LaunchResult.Launched -> Unit
+            }
         }
     }
 
