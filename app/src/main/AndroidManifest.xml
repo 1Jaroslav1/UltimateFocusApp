@@ -76,6 +76,17 @@
             android:noHistory="true"
             android:theme="@style/Theme.UltimateFocus" />
 
+        <!-- ULT-81: session-expired overlay shown when the active session
+             reaches zero under the MINDFUL_EXTENSION_DELAY behavior mode.
+             Forces a countdown before the user can tap "Extend". -->
+        <activity
+            android:name=".ui.sessiontimer.SessionExpiredOverlayActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.UltimateFocus" />
+
         <receiver
             android:name=".receiver.PackageChangeReceiver"
             android:exported="false">

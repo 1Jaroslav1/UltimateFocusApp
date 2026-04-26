@@ -2,7 +2,7 @@
  * In-memory test double for SystemActions. Records invocations so tests
  * can assert which gesture triggered which system action, without touching
  * the real Android APIs (Intents, DevicePolicyManager, PackageManager).
- * Covers: ULT-16, ULT-17, ULT-18
+ * Covers: ULT-16, ULT-17, ULT-18, ULT-81
  */
 package com.ultimatefocus.app.domain.service
 
@@ -20,6 +20,8 @@ class FakeSystemActions(
     var lockScreenCalls: Int = 0
         private set
     var requestLockPermissionCalls: Int = 0
+        private set
+    var goHomeCalls: Int = 0
         private set
 
     override fun openNotificationShade() {
@@ -43,6 +45,8 @@ class FakeSystemActions(
     }
 
     override fun isLockPermissionGranted(): Boolean = adminGranted
+
+    override fun goHome() { goHomeCalls++ }
 
     fun setAdminGranted(granted: Boolean) {
         adminGranted = granted

@@ -7,7 +7,11 @@
  * - openNotificationShade (ULT-17)
  * - lockScreen / requestLockPermission / isLockPermissionGranted (ULT-18)
  *
- * Covers: ULT-16, ULT-17, ULT-18
+ * goHome (ULT-81): broadcasts ACTION_MAIN/CATEGORY_HOME with NEW_TASK |
+ * CLEAR_TOP so a foreground app is replaced with the launcher home screen.
+ * Used by the EXIT_APP / EXIT_AND_BLOCK session-expiry behavior modes.
+ *
+ * Covers: ULT-16, ULT-17, ULT-18, ULT-81
  */
 package com.ultimatefocus.app.data.system
 
@@ -115,6 +119,14 @@ class SystemActionsImpl @Inject constructor(
 
     override fun isLockPermissionGranted(): Boolean =
         devicePolicyManager().isAdminActive(adminComponent())
+
+    override fun goHome() {
+        val home = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        runCatching { context.startActivity(home) }
+    }
 
     private fun devicePolicyManager(): DevicePolicyManager =
         context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
