@@ -64,14 +64,18 @@ class MindfulLaunchDelayViewModel @Inject constructor(
         viewModelScope.launch {
             val total = MindfulLaunchDelayActivity.DELAY_MS
             val tick = PROGRESS_TICK_MS
-            val startMs = System.currentTimeMillis()
-            while (true) {
-                val elapsed = System.currentTimeMillis() - startMs
-                val ratio = (elapsed.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-                _state.value = _state.value.copy(progress = ratio)
-                if (elapsed >= total) break
+            // Drive progress from accumulated delay() ticks rather than
+            // System.currentTimeMillis() — keeps the view-model purely on
+            // coroutine virtual time, so kotlinx-coroutines-test
+            // advanceTimeBy() in unit tests advances both the delays and
+            // the progress in lockstep without wall-clock reads.
+            val totalTicks = (total / tick).toInt().coerceAtLeast(1)
+            for (i in 1..totalTicks) {
                 delay(tick)
+                val ratio = (i.toFloat() / totalTicks.toFloat()).coerceIn(0f, 1f)
+                _state.value = _state.value.copy(progress = ratio)
             }
+            _state.value = _state.value.copy(progress = 1f)
             _events.send(Event.Done)
         }
     }

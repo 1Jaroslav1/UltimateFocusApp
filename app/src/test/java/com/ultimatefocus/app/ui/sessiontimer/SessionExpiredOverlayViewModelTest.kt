@@ -19,7 +19,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -76,8 +75,12 @@ class SessionExpiredOverlayViewModelTest {
     @Test
     fun progress_isPartialMidway() = runTest {
         viewModel.bind("com.alpha", "Alpha")
+        // No advanceUntilIdle here — the loop is finite and would run to
+        // completion, which would defeat the "midway" assertion. The
+        // tick-based loop in the view-model runs in lockstep with
+        // advanceTimeBy, so half the EXTEND_DELAY_MS leaves us at half
+        // progress.
         advanceTimeBy(SessionExpiredOverlayActivity.EXTEND_DELAY_MS / 2)
-        advanceUntilIdle()
         val midProgress = viewModel.state.value.progress
         assertTrue("progress should advance past 0", midProgress > 0f)
         assertTrue("progress should not yet be 1", midProgress < 1f)
