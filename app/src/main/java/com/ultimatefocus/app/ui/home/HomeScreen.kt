@@ -102,6 +102,18 @@ fun HomeScreen(
             )
         }
     }
+    LaunchedEffect(Unit) {
+        viewModel.sessionPicker.collect { event ->
+            context.startActivity(
+                com.ultimatefocus.app.ui.sessiontimer.SessionDurationPickerActivity.intent(
+                    context = context,
+                    packageName = event.packageName,
+                    appLabel = event.appLabel,
+                    defaultMode = preferences.inAppReminderExpiryMode,
+                ),
+            )
+        }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()

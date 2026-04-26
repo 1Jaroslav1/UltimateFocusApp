@@ -8,7 +8,12 @@
  * uses it to render "Blocked by Work Focus until 17:00" instead of the
  * manual-block "Blocked for 1h" copy.
  *
- * Covers: ULT-21, ULT-24
+ * `SessionDurationRequired` is emitted when the user attempts to open a
+ * package with the In-App Reminder enabled and no active session yet
+ * (ULT-78). The caller routes the user to the duration picker overlay
+ * instead of completing the launch.
+ *
+ * Covers: ULT-21, ULT-24, ULT-78
  */
 package com.ultimatefocus.app.domain.model
 
@@ -20,5 +25,10 @@ sealed interface LaunchResult {
         val remainingMs: Long,
         val durationLabel: String,
         val scheduleName: String? = null,
+    ) : LaunchResult
+
+    data class SessionDurationRequired(
+        val packageName: String,
+        val appLabel: String,
     ) : LaunchResult
 }

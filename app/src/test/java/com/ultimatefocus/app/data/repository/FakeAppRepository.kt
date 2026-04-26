@@ -4,7 +4,7 @@
  * including shortcut resolution for bottom-bar quick-access slots.
  * launchApp returns a LaunchResult so tests can simulate a blocked attempt by
  * setting `blockedResultFor` (ULT-21).
- * Covers: ULT-6, ULT-7, ULT-8, ULT-13, ULT-14, ULT-20, ULT-21
+ * Covers: ULT-6, ULT-7, ULT-8, ULT-13, ULT-14, ULT-20, ULT-21, ULT-78
  */
 package com.ultimatefocus.app.data.repository
 
@@ -25,6 +25,9 @@ class FakeAppRepository : AppRepository {
 
     /** If non-null, launchApp returns this Blocked result instead of launching. */
     var blockedResultFor: (String) -> LaunchResult.Blocked? = { null }
+
+    /** If non-null, launchApp returns this SessionDurationRequired instead of launching. */
+    var sessionRequiredResultFor: (String) -> LaunchResult.SessionDurationRequired? = { null }
 
     /** Defaults returned by resolveShortcut when the override is null or cannot be matched. */
     val defaultShortcuts: MutableMap<ShortcutSlot, AppInfo?> =
@@ -52,6 +55,8 @@ class FakeAppRepository : AppRepository {
     }
 
     override suspend fun launchApp(appInfo: AppInfo): LaunchResult {
+        val sessionRequired = sessionRequiredResultFor(appInfo.packageName)
+        if (sessionRequired != null) return sessionRequired
         val blocked = blockedResultFor(appInfo.packageName)
         if (blocked != null) return blocked
         launchedApp = appInfo

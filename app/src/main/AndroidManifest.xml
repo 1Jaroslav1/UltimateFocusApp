@@ -52,6 +52,18 @@
             android:excludeFromRecents="true"
             android:theme="@style/Theme.UltimateFocus" />
 
+        <!-- ULT-78: duration picker shown when the user opens an app with the
+             In-App Reminder enabled. Translucent dialog-style theme so the
+             previous screen remains visible behind. excludeFromRecents +
+             singleTask keep the picker out of the task history. -->
+        <activity
+            android:name=".ui.sessiontimer.SessionDurationPickerActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.UltimateFocus" />
+
         <receiver
             android:name=".receiver.PackageChangeReceiver"
             android:exported="false">

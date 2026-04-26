@@ -24,7 +24,14 @@
  * - Resolves bottom-bar quick-access shortcuts: materializes a user override
  *   to an AppInfo, or falls back to the system default dialer/camera via
  *   PackageManager.resolveActivity (ULT-13, ULT-14)
- * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20, ULT-21, ULT-24, ULT-73, ULT-75
+ * - In-App Time Reminder pre-check (ULT-78): launchApp also consults
+ *   SessionTimerRepository.isReminderActiveFor and SessionTimerCoordinator.
+ *   When a reminder-enabled package is launched without an in-flight
+ *   session it returns LaunchResult.SessionDurationRequired so the caller
+ *   routes the user to the duration picker; once the picker starts a
+ *   session and re-enters launchApp, isSessionActiveFor short-circuits
+ *   this branch.
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20, ULT-21, ULT-24, ULT-73, ULT-75, ULT-78
  */
 package com.ultimatefocus.app.data.repository
 
@@ -46,9 +53,11 @@ import com.ultimatefocus.app.domain.model.ShortcutTarget
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import com.ultimatefocus.app.domain.repository.BlockedTagRepository
 import com.ultimatefocus.app.domain.repository.BlockingScheduleRepository
+import com.ultimatefocus.app.domain.repository.SessionTimerRepository
 import com.ultimatefocus.app.domain.repository.TagRepository
 import com.ultimatefocus.app.domain.service.BlockingSourceCoordinator
 import com.ultimatefocus.app.domain.service.Clock
+import com.ultimatefocus.app.domain.service.SessionTimerCoordinator
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -70,6 +79,8 @@ class AppRepositoryImpl @Inject constructor(
     private val coordinator: BlockingSourceCoordinator,
     private val tagRepository: TagRepository,
     private val clock: Clock,
+    private val sessionTimerRepository: SessionTimerRepository,
+    private val sessionTimerCoordinator: SessionTimerCoordinator,
 ) : AppRepository {
 
     private val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
@@ -244,6 +255,21 @@ class AppRepositoryImpl @Inject constructor(
     }
 
     override suspend fun launchApp(appInfo: AppInfo): LaunchResult {
+        // Session timer pre-check (ULT-78): if the package has the in-app
+        // reminder enabled and there is no session in progress, route the
+        // user to the duration picker instead of launching. The picker
+        // calls launchApp again after the session is started; isSessionActiveFor
+        // short-circuits this branch on that second call so the launch
+        // proceeds.
+        if (
+            !sessionTimerCoordinator.isSessionActiveFor(appInfo.packageName) &&
+            sessionTimerRepository.isReminderActiveFor(appInfo.packageName)
+        ) {
+            return LaunchResult.SessionDurationRequired(
+                packageName = appInfo.packageName,
+                appLabel = appInfo.label,
+            )
+        }
         // Single block source — coordinator unifies manual + scheduled +
         // tag-derived blocks. Importantly the coordinator looks tag-blocks
         // up by packageName (not appInfo.tags), so shortcut launches whose

@@ -61,6 +61,11 @@ class HomeViewModel @Inject constructor(
     private val _blockedAttempts = MutableSharedFlow<LaunchResult.Blocked>(extraBufferCapacity = 4)
     val blockedAttempts: SharedFlow<LaunchResult.Blocked> = _blockedAttempts.asSharedFlow()
 
+    private val _sessionPicker =
+        MutableSharedFlow<LaunchResult.SessionDurationRequired>(extraBufferCapacity = 4)
+    val sessionPicker: SharedFlow<LaunchResult.SessionDurationRequired> =
+        _sessionPicker.asSharedFlow()
+
     val favoriteApps: StateFlow<List<AppInfo>> = appRepository.getFavoriteApps()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -129,7 +134,11 @@ class HomeViewModel @Inject constructor(
     fun launchApp(appInfo: AppInfo) {
         viewModelScope.launch {
             val result = appRepository.launchApp(appInfo)
-            if (result is LaunchResult.Blocked) _blockedAttempts.emit(result)
+            when (result) {
+                is LaunchResult.Blocked -> _blockedAttempts.emit(result)
+                is LaunchResult.SessionDurationRequired -> _sessionPicker.emit(result)
+                LaunchResult.Launched -> Unit
+            }
         }
     }
 
@@ -144,7 +153,11 @@ class HomeViewModel @Inject constructor(
         } ?: return
         viewModelScope.launch {
             val result = appRepository.launchApp(target)
-            if (result is LaunchResult.Blocked) _blockedAttempts.emit(result)
+            when (result) {
+                is LaunchResult.Blocked -> _blockedAttempts.emit(result)
+                is LaunchResult.SessionDurationRequired -> _sessionPicker.emit(result)
+                LaunchResult.Launched -> Unit
+            }
         }
     }
 
