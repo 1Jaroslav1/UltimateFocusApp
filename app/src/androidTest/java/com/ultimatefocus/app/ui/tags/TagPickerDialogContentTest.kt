@@ -1,0 +1,215 @@
+/**
+ * Compose UI tests for the stateless TagPickerDialogContent. Constructs a
+ * TagPickerUiState manually so each scenario can be exercised without Hilt
+ * or Room. Verifies: empty-state hint with "Manage tags" shortcut, single-app
+ * row tap fires the toggle, bulk row renders the SomeAssigned ◐ prefix,
+ * disabled rows show the explanatory message, and the Done button fires
+ * onDismiss. Selection state is asserted via the `tag_picker_state_<id>`
+ * tag's text content (✓ / ◐ / blank), now that the modal uses the dark
+ * default-modal style instead of Material checkboxes.
+ * Covers: ULT-73
+ */
+package com.ultimatefocus.app.ui.tags
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.ultimatefocus.app.domain.model.Tag
+import com.ultimatefocus.app.domain.model.TagColor
+import com.ultimatefocus.app.ui.theme.UltimateFocusTheme
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class TagPickerDialogContentTest {
+
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    @Test
+    fun empty_state_offers_manage_tags_shortcut() {
+        var manageTagsClicked = false
+        composeRule.setContent {
+            UltimateFocusTheme {
+                TagPickerDialogContent(
+                    state = TagPickerUiState(
+                        items = emptyList(),
+                        packagesUnderEdit = listOf("com.app"),
+                        isLoading = false,
+                    ),
+                    onToggle = {},
+                    onManageTags = { manageTagsClicked = true },
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tag_picker_empty_state").assertIsDisplayed()
+        composeRule.onNodeWithTag("tag_picker_manage_tags_button").performClick()
+        assertTrue(manageTagsClicked)
+    }
+
+    @Test
+    fun single_app_row_emits_toggle_on_tap() {
+        val tag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
+        var toggled: TagPickerItem? = null
+        composeRule.setContent {
+            UltimateFocusTheme {
+                TagPickerDialogContent(
+                    state = TagPickerUiState(
+                        items = listOf(
+                            TagPickerItem(tag = tag, state = TagAssignmentState.NoneAssigned, disabledReason = null),
+                        ),
+                        packagesUnderEdit = listOf("com.app"),
+                        isLoading = false,
+                    ),
+                    onToggle = { toggled = it },
+                    onManageTags = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tag_picker_row_${tag.id}").performClick()
+        assertEquals(tag.id, toggled?.tag?.id)
+    }
+
+    @Test
+    fun assigned_row_renders_check_prefix() {
+        val tag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
+        composeRule.setContent {
+            UltimateFocusTheme {
+                TagPickerDialogContent(
+                    state = TagPickerUiState(
+                        items = listOf(
+                            TagPickerItem(tag = tag, state = TagAssignmentState.AllAssigned, disabledReason = null),
+                        ),
+                        packagesUnderEdit = listOf("com.app"),
+                        isLoading = false,
+                    ),
+                    onToggle = {},
+                    onManageTags = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tag_picker_state_${tag.id}").assertTextEquals("✓ ")
+    }
+
+    @Test
+    fun bulk_mode_some_assigned_renders_partial_prefix() {
+        val tag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
+        composeRule.setContent {
+            UltimateFocusTheme {
+                TagPickerDialogContent(
+                    state = TagPickerUiState(
+                        items = listOf(
+                            TagPickerItem(tag = tag, state = TagAssignmentState.SomeAssigned, disabledReason = null),
+                        ),
+                        packagesUnderEdit = listOf("com.a", "com.b"),
+                        isLoading = false,
+                    ),
+                    onToggle = {},
+                    onManageTags = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tag_picker_state_${tag.id}").assertTextEquals("◐ ")
+    }
+
+    @Test
+    fun disabled_row_shows_explanatory_message_for_app_cap() {
+        val tag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
+        composeRule.setContent {
+            UltimateFocusTheme {
+                TagPickerDialogContent(
+                    state = TagPickerUiState(
+                        items = listOf(
+                            TagPickerItem(tag = tag, state = TagAssignmentState.NoneAssigned, disabledReason = TagPickerDisabledReason.AppAtMaxTags),
+                        ),
+                        packagesUnderEdit = listOf("com.app"),
+                        isLoading = false,
+                    ),
+                    onToggle = {},
+                    onManageTags = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tag_picker_disabled_message_${tag.id}").assertIsDisplayed()
+        composeRule.onNodeWithText("App already has the maximum 5 tags.").assertIsDisplayed()
+    }
+
+    @Test
+    fun blocked_row_shows_tag_blocked_message() {
+        val tag = Tag(id = 1L, name = "Social", color = TagColor.STEEL_BLUE)
+        composeRule.setContent {
+            UltimateFocusTheme {
+                TagPickerDialogContent(
+                    state = TagPickerUiState(
+                        items = listOf(
+                            TagPickerItem(
+                                tag = tag,
+                                state = TagAssignmentState.AllAssigned,
+                                disabledReason = TagPickerDisabledReason.TagBlocked,
+                            ),
+                        ),
+                        packagesUnderEdit = listOf("com.app"),
+                        isLoading = false,
+                    ),
+                    onToggle = {},
+                    onManageTags = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tag_picker_disabled_message_${tag.id}").assertIsDisplayed()
+        composeRule.onNodeWithText("Tag is currently blocked.").assertIsDisplayed()
+    }
+
+    @Test
+    fun done_button_dismisses() {
+        var dismissed = false
+        composeRule.setContent {
+            UltimateFocusTheme {
+                TagPickerDialogContent(
+                    state = TagPickerUiState(
+                        items = emptyList(),
+                        packagesUnderEdit = listOf("com.app"),
+                        isLoading = false,
+                    ),
+                    onToggle = {},
+                    onManageTags = {},
+                    onDismiss = { dismissed = true },
+                )
+            }
+        }
+        composeRule.onNodeWithTag("tag_picker_done_button").performClick()
+        assertTrue(dismissed)
+    }
+
+    @Test
+    fun bulk_title_announces_count() {
+        composeRule.setContent {
+            UltimateFocusTheme {
+                TagPickerDialogContent(
+                    state = TagPickerUiState(
+                        items = emptyList(),
+                        packagesUnderEdit = listOf("com.a", "com.b", "com.c"),
+                        isLoading = false,
+                    ),
+                    onToggle = {},
+                    onManageTags = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithText("Tags for 3 apps").assertIsDisplayed()
+    }
+}

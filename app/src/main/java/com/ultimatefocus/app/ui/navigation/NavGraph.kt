@@ -1,9 +1,9 @@
 /**
  * Navigation host that maps routes to composable screens.
  * Home and Drawer live inside a HorizontalPager for smooth, finger-following
- * swipe transitions. Settings, BlockingSchedules, and BlockingScheduleEditor
- * are pushed on top via standard NavHost navigation with horizontal slide
- * transitions for visual consistency.
+ * swipe transitions. Settings, BlockingSchedules, BlockingScheduleEditor, and
+ * ManageTags are pushed on top via standard NavHost navigation with horizontal
+ * slide transitions for visual consistency.
  *
  * Transitions: each pushed route uses the standard "push" pattern — on
  * forward navigation the outgoing screen slides off to the LEFT while the
@@ -20,11 +20,11 @@
  *     since it IS the device home screen.
  *   - On the drawer pager page (page 1): a BackHandler animates the pager
  *     back to home.
- *   - On any pushed route (Settings / BlockingSchedules / Editor): NavHost's
- *     own BackHandler pops the back stack, so the OS edge-swipe-back gesture
- *     navigates back exactly like in other Android apps.
+ *   - On any pushed route (Settings / BlockingSchedules / Editor / ManageTags):
+ *     NavHost's own BackHandler pops the back stack, so the OS edge-swipe-back
+ *     gesture navigates back exactly like in other Android apps.
  *
- * Covers: ULT-5, ULT-6, ULT-7, ULT-8, ULT-23, ULT-24, ULT-25
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-8, ULT-23, ULT-24, ULT-25, ULT-72
  */
 package com.ultimatefocus.app.ui.navigation
 
@@ -49,6 +49,7 @@ import com.ultimatefocus.app.ui.blocking.BlockingSchedulesListScreen
 import com.ultimatefocus.app.ui.drawer.AppDrawerScreen
 import com.ultimatefocus.app.ui.home.HomeScreen
 import com.ultimatefocus.app.ui.settings.SettingsScreen
+import com.ultimatefocus.app.ui.tags.ManageTagsScreen
 import kotlinx.coroutines.launch
 
 @Composable
@@ -80,6 +81,11 @@ fun NavGraph(navController: NavHostController) {
                         onOpenDrawer = {
                             coroutineScope.launch { pagerState.animateScrollToPage(1) }
                         },
+                        onOpenManageTags = {
+                            navController.navigate(Screen.ManageTags.route) {
+                                launchSingleTop = true
+                            }
+                        },
                     )
                     1 -> AppDrawerScreen(
                         isActive = pagerState.currentPage == 1,
@@ -88,6 +94,11 @@ fun NavGraph(navController: NavHostController) {
                         },
                         onOpenSettings = {
                             navController.navigate(Screen.Settings.route) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onOpenManageTags = {
+                            navController.navigate(Screen.ManageTags.route) {
                                 launchSingleTop = true
                             }
                         },
@@ -107,6 +118,11 @@ fun NavGraph(navController: NavHostController) {
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToBlockingSchedules = {
                     navController.navigate(Screen.BlockingSchedules.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onOpenManageTags = {
+                    navController.navigate(Screen.ManageTags.route) {
                         launchSingleTop = true
                     }
                 },
@@ -149,6 +165,18 @@ fun NavGraph(navController: NavHostController) {
             popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
         ) {
             BlockingScheduleEditorScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(
+            route = Screen.ManageTags.route,
+            enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
+            exitTransition = { slideOutHorizontally(targetOffsetX = { -it }) },
+            popEnterTransition = { slideInHorizontally(initialOffsetX = { -it }) },
+            popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+        ) {
+            ManageTagsScreen(
                 onNavigateBack = { navController.popBackStack() },
             )
         }

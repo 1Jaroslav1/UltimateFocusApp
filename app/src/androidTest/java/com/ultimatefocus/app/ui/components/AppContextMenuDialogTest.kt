@@ -195,4 +195,52 @@ class AppContextMenuDialogTest {
         composeRule.onNodeWithTag("context_menu_block_app").assertIsDisplayed()
         composeRule.onNodeWithTag("context_menu_block_status").assertDoesNotExist()
     }
+
+    // ── Tag entry points (ULT-73) ────────────────────────────────────────────
+
+    @Test
+    fun manageTagsRow_isDisplayedAndInvokesCallback() {
+        var managedFor: AppInfo? = null
+        val app = makeApp()
+        composeRule.setContent {
+            UltimateFocusTheme {
+                AppContextMenuDialog(
+                    app = app,
+                    nowEpochMs = 1_000L,
+                    onToggleFavorite = {},
+                    onBlockApp = {},
+                    onManageTags = { managedFor = it },
+                    onAppInfo = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("context_menu_manage_tags")
+            .assertIsDisplayed()
+            .performClick()
+        assertEquals(app.packageName, managedFor?.packageName)
+    }
+
+    @Test
+    fun selectMultipleRow_isDisplayedAndInvokesCallback() {
+        var selectedFor: AppInfo? = null
+        val app = makeApp()
+        composeRule.setContent {
+            UltimateFocusTheme {
+                AppContextMenuDialog(
+                    app = app,
+                    nowEpochMs = 1_000L,
+                    onToggleFavorite = {},
+                    onBlockApp = {},
+                    onSelectMultiple = { selectedFor = it },
+                    onAppInfo = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("context_menu_select_multiple")
+            .assertIsDisplayed()
+            .performClick()
+        assertEquals(app.packageName, selectedFor?.packageName)
+    }
 }

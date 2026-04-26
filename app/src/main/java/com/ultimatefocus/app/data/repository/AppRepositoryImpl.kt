@@ -1,20 +1,30 @@
 /**
  * Offline-first repository implementation:
  * - Queries the Android LauncherApps system service for installed apps
- * - Combines installed apps with Room-persisted favorites and active blocks
- *   (manual ULT-20 ∪ scheduled ULT-24) reactively via BlockingSourceCoordinator
- *   — blocked apps carry a non-null AppInfo.blockedUntilEpochMs so the UI can
- *   render the lock + strikethrough.
+ * - Combines installed apps with Room-persisted favorites, active blocks
+ *   from three sources reactively — manual (ULT-20) ∪ scheduled (ULT-24)
+ *   via BlockingSourceCoordinator and tag-derived (ULT-75) via
+ *   BlockedTagRepository — and tag assignments (ULT-73) so AppInfo carries
+ *   both the displayed Tag list and a non-null blockedUntilEpochMs whenever
+ *   any source covers the package.
+ * - Priority for AppInfo.blockedUntilEpochMs is manual → scheduled → tag.
+ *   Manual wins because it is the most binding contract; scheduled wins
+ *   over tag because it has a concrete window-end timestamp tied to a
+ *   user-named schedule.
  * - launchApp enforces blocks: when the target app has an active block
  *   it returns LaunchResult.Blocked instead of starting the intent. The
- *   caller routes the user to BlockedAppActivity (ULT-21).
+ *   caller routes the user to BlockedAppActivity (ULT-21). All three
+ *   block sources (manual / scheduled / tag-derived) are routed through
+ *   BlockingSourceCoordinator.activeBlockInfo so that bottom-bar
+ *   shortcut launches — whose AppInfo comes from resolveDefault() and
+ *   has no tags populated — are still tag-block-gated.
  * - Registers a LauncherApps callback so the list auto-refreshes on
  *   installs/removals; on removal also calls
  *   BlockingScheduleRepository.purgePackage to keep schedule junctions tidy.
  * - Resolves bottom-bar quick-access shortcuts: materializes a user override
  *   to an AppInfo, or falls back to the system default dialer/camera via
  *   PackageManager.resolveActivity (ULT-13, ULT-14)
- * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20, ULT-21, ULT-24
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-13, ULT-14, ULT-20, ULT-21, ULT-24, ULT-73, ULT-75
  */
 package com.ultimatefocus.app.data.repository
 
@@ -34,7 +44,9 @@ import com.ultimatefocus.app.domain.model.LaunchResult
 import com.ultimatefocus.app.domain.model.ShortcutSlot
 import com.ultimatefocus.app.domain.model.ShortcutTarget
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
+import com.ultimatefocus.app.domain.repository.BlockedTagRepository
 import com.ultimatefocus.app.domain.repository.BlockingScheduleRepository
+import com.ultimatefocus.app.domain.repository.TagRepository
 import com.ultimatefocus.app.domain.service.BlockingSourceCoordinator
 import com.ultimatefocus.app.domain.service.Clock
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -54,7 +66,9 @@ class AppRepositoryImpl @Inject constructor(
     private val favoriteDao: FavoriteDao,
     private val blockedAppRepository: BlockedAppRepository,
     private val blockingScheduleRepository: BlockingScheduleRepository,
+    private val blockedTagRepository: BlockedTagRepository,
     private val coordinator: BlockingSourceCoordinator,
+    private val tagRepository: TagRepository,
     private val clock: Clock,
 ) : AppRepository {
 
@@ -110,23 +124,45 @@ class AppRepositoryImpl @Inject constructor(
         })
     }
 
-    override fun getInstalledApps(): Flow<List<AppInfo>> =
-        combine(
+    override fun getInstalledApps(): Flow<List<AppInfo>> {
+        // Compose two 4-arg combines (max of the typed combine overload is 5)
+        // into a single emission so the UI sees consistent state.
+        val baseFlow = combine(
             _installedApps,
             favoriteDao.getFavoritePackageNames(),
             blockedAppRepository.observeActiveBlocks(),
             blockingScheduleRepository.observeActiveWindowEndByPackage(),
         ) { apps, favorites, manualBlocks, scheduledUntilByPkg ->
-            val manualUntilByPkg = manualBlocks.associate { it.packageName to it.blockedUntilEpochMs }
-            apps.map { app ->
+            BaseSnapshot(apps, favorites, manualBlocks, scheduledUntilByPkg)
+        }
+        val tagFlow = combine(
+            tagRepository.observeAppToTagsMap(),
+            blockedTagRepository.observeActiveBlockedPackagesByTags(),
+        ) { tagsByApp, tagBlocksByApp -> tagsByApp to tagBlocksByApp }
+        return combine(baseFlow, tagFlow) { base, (tagsByApp, tagBlocksByApp) ->
+            val manualUntilByPkg =
+                base.manualBlocks.associate { it.packageName to it.blockedUntilEpochMs }
+            base.apps.map { app ->
                 app.copy(
-                    isFavorite = app.packageName in favorites,
+                    isFavorite = app.packageName in base.favorites,
                     blockedUntilEpochMs = resolveBlockedUntil(
-                        app.packageName, manualUntilByPkg, scheduledUntilByPkg,
+                        app.packageName,
+                        manualUntilByPkg,
+                        base.scheduledUntilByPkg,
+                        tagBlocksByApp,
                     ),
+                    tags = tagsByApp[app.packageName] ?: emptyList(),
                 )
             }
         }
+    }
+
+    private data class BaseSnapshot(
+        val apps: List<AppInfo>,
+        val favorites: List<String>,
+        val manualBlocks: List<com.ultimatefocus.app.domain.model.BlockedApp>,
+        val scheduledUntilByPkg: Map<String, Long>,
+    )
 
     override fun searchApps(query: String): Flow<List<AppInfo>> =
         getInstalledApps().map { apps ->
@@ -134,38 +170,63 @@ class AppRepositoryImpl @Inject constructor(
             else apps.filter { it.label.contains(query, ignoreCase = true) }
         }
 
-    override fun getFavoriteApps(): Flow<List<AppInfo>> =
-        combine(
+    override fun getFavoriteApps(): Flow<List<AppInfo>> {
+        val baseFlow = combine(
             _installedApps,
             favoriteDao.getAllFavorites(),
             blockedAppRepository.observeActiveBlocks(),
             blockingScheduleRepository.observeActiveWindowEndByPackage(),
         ) { apps, favorites, manualBlocks, scheduledUntilByPkg ->
-            val favoriteMap = favorites.associateBy { it.packageName }
-            val manualUntilByPkg = manualBlocks.associate { it.packageName to it.blockedUntilEpochMs }
-            apps.filter { it.packageName in favoriteMap }
+            FavoriteBaseSnapshot(apps, favorites, manualBlocks, scheduledUntilByPkg)
+        }
+        val tagFlow = combine(
+            tagRepository.observeAppToTagsMap(),
+            blockedTagRepository.observeActiveBlockedPackagesByTags(),
+        ) { tagsByApp, tagBlocksByApp -> tagsByApp to tagBlocksByApp }
+        return combine(baseFlow, tagFlow) { base, (tagsByApp, tagBlocksByApp) ->
+            val favoriteMap = base.favorites.associateBy { it.packageName }
+            val manualUntilByPkg =
+                base.manualBlocks.associate { it.packageName to it.blockedUntilEpochMs }
+            base.apps.filter { it.packageName in favoriteMap }
                 .map { app ->
                     app.copy(
                         isFavorite = true,
                         favoriteOrder = favoriteMap[app.packageName]?.displayOrder ?: 0,
                         blockedUntilEpochMs = resolveBlockedUntil(
-                            app.packageName, manualUntilByPkg, scheduledUntilByPkg,
+                            app.packageName,
+                            manualUntilByPkg,
+                            base.scheduledUntilByPkg,
+                            tagBlocksByApp,
                         ),
+                        tags = tagsByApp[app.packageName] ?: emptyList(),
                     )
                 }
                 .sortedBy { it.favoriteOrder }
         }
+    }
+
+    private data class FavoriteBaseSnapshot(
+        val apps: List<AppInfo>,
+        val favorites: List<FavoriteEntity>,
+        val manualBlocks: List<com.ultimatefocus.app.domain.model.BlockedApp>,
+        val scheduledUntilByPkg: Map<String, Long>,
+    )
 
     /**
-     * Manual block wins (more binding contract). Otherwise fall back to the
-     * scheduled window-end timestamp. Null when the package is not currently
-     * blocked from either source.
+     * Resolution priority: manual > scheduled > tag-derived. Manual is the
+     * most binding contract; scheduled is named/structured; tag is the
+     * loosest. Null when the package is not currently blocked from any
+     * source. ULT-75 tag-blocks already aggregate as MAX expiry across the
+     * app's blocked tags inside observeActiveBlockedPackagesByTags.
      */
     private fun resolveBlockedUntil(
         packageName: String,
         manualUntilByPkg: Map<String, Long>,
         scheduledUntilByPkg: Map<String, Long>,
-    ): Long? = manualUntilByPkg[packageName] ?: scheduledUntilByPkg[packageName]
+        tagBlocksByApp: Map<String, Long>,
+    ): Long? = manualUntilByPkg[packageName]
+        ?: scheduledUntilByPkg[packageName]
+        ?: tagBlocksByApp[packageName]
 
     override suspend fun toggleFavorite(appInfo: AppInfo) {
         if (favoriteDao.isFavorite(appInfo.packageName)) {
@@ -183,6 +244,11 @@ class AppRepositoryImpl @Inject constructor(
     }
 
     override suspend fun launchApp(appInfo: AppInfo): LaunchResult {
+        // Single block source — coordinator unifies manual + scheduled +
+        // tag-derived blocks. Importantly the coordinator looks tag-blocks
+        // up by packageName (not appInfo.tags), so shortcut launches whose
+        // AppInfo comes from resolveDefault() — which doesn't populate
+        // tags — are still gated correctly.
         val info = coordinator.activeBlockInfo(appInfo.packageName)
         if (info != null) {
             val remaining = (info.blockedUntilEpochMs - clock.now()).coerceAtLeast(0L)
@@ -200,6 +266,13 @@ class AppRepositoryImpl @Inject constructor(
                     remainingMs = remaining,
                     durationLabel = "",
                     scheduleName = info.scheduleName,
+                )
+                is ActiveBlockInfo.Tag -> LaunchResult.Blocked(
+                    packageName = appInfo.packageName,
+                    appLabel = appInfo.label,
+                    remainingMs = remaining,
+                    durationLabel = info.durationLabel,
+                    scheduleName = null,
                 )
             }
         }
