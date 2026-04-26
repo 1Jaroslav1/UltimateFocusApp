@@ -31,7 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -106,6 +107,20 @@ fun SessionDurationPickerContent(
                     color = MaterialTheme.colorScheme.onBackground,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                // Surface the configured default expiry mode here so the
+                // user knows what will happen at session end without
+                // expanding the panel. The expanded panel still allows a
+                // per-session override.
+                Text(
+                    text = "At session end: ${labelFor(state.selectedMode)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("session_picker_default_mode_label"),
                 )
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -173,37 +188,38 @@ fun SessionDurationPickerContent(
 
 @Composable
 private fun PresetGrid(onConfirm: (Int) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        SessionDurationMinutes.PRESETS.chunked(2).forEach { rowItems ->
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-            ) {
-                rowItems.forEach { minutes ->
-                    PresetButton(
-                        minutes = minutes,
-                        onClick = { onConfirm(minutes) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (rowItems.size == 1) Spacer(modifier = Modifier.weight(1f))
-            }
+    // Single horizontal row of 4 buttons — tighter than the 2x2 grid and
+    // matches the AC ("4 preset buttons: 1 min, 5 min, 10 min, 15 min")
+    // visually as a quick-access strip.
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        SessionDurationMinutes.PRESETS.forEach { minutes ->
+            PresetButton(
+                minutes = minutes,
+                onClick = { onConfirm(minutes) },
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
 
 @Composable
 private fun PresetButton(minutes: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Button(
+    OutlinedButton(
         onClick = onClick,
-        contentPadding = PaddingValues(vertical = 14.dp),
+        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 12.dp),
+        border = BorderStroke(1.dp, Color.White),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color.Transparent,
+            contentColor = Color.White,
+        ),
         modifier = modifier
-            .height(56.dp)
+            .height(40.dp)
             .testTag("session_picker_preset_${minutes}"),
     ) {
-        Text(text = "$minutes min", style = MaterialTheme.typography.titleMedium)
+        Text(text = "$minutes min", style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -214,6 +230,10 @@ private fun CustomMinutesField(
     onValueChange: (String) -> Unit,
     onConfirm: () -> Unit,
 ) {
+    // Single-row compact input. The OutlinedTextField is constrained to
+    // 48dp tall so it stops looking out of proportion to the Start
+    // button next to it; a short placeholder ("min") keeps the
+    // narrower field readable.
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -222,21 +242,36 @@ private fun CustomMinutesField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text("Custom minutes (1–240)") },
+            placeholder = {
+                Text(
+                    text = "min",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
             singleLine = true,
             isError = value.isNotEmpty() && !valid,
+            textStyle = MaterialTheme.typography.bodyMedium,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                 keyboardType = KeyboardType.Number,
             ),
             modifier = Modifier
                 .weight(1f)
+                .height(48.dp)
                 .testTag("session_picker_custom_field"),
         )
-        Button(
+        OutlinedButton(
             onClick = onConfirm,
             enabled = valid,
-            modifier = Modifier.testTag("session_picker_custom_confirm"),
-        ) { Text("Start") }
+            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp),
+            border = BorderStroke(1.dp, Color.White),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = Color.Transparent,
+                contentColor = Color.White,
+            ),
+            modifier = Modifier
+                .height(40.dp)
+                .testTag("session_picker_custom_confirm"),
+        ) { Text(text = "Start", style = MaterialTheme.typography.bodyMedium) }
     }
 }
 
@@ -267,6 +302,9 @@ private fun ExpiryModeRadioGroup(
         }
     }
 }
+
+private fun labelFor(mode: SessionExpiryMode): String =
+    PICKER_OPTIONS.firstOrNull { it.mode == mode }?.title ?: mode.name
 
 private data class PickerExpiryOption(val mode: SessionExpiryMode, val title: String)
 

@@ -255,21 +255,13 @@ class AppRepositoryImpl @Inject constructor(
     }
 
     override suspend fun launchApp(appInfo: AppInfo): LaunchResult {
-        // Session timer pre-check (ULT-78): if the package has the in-app
-        // reminder enabled and there is no session in progress, route the
-        // user to the duration picker instead of launching. The picker
-        // calls launchApp again after the session is started; isSessionActiveFor
-        // short-circuits this branch on that second call so the launch
-        // proceeds.
-        if (
-            !sessionTimerCoordinator.isSessionActiveFor(appInfo.packageName) &&
-            sessionTimerRepository.isReminderActiveFor(appInfo.packageName)
-        ) {
-            return LaunchResult.SessionDurationRequired(
-                packageName = appInfo.packageName,
-                appLabel = appInfo.label,
-            )
-        }
+        // Block check FIRST so a blocked app always surfaces the
+        // BlockedAppActivity, never the session-duration picker. This
+        // matters in particular for the EXIT_AND_BLOCK expiry mode: the
+        // session that just ended writes a block back into
+        // BlockedAppRepository, and the very next launch attempt must
+        // see that block — not a fresh duration picker.
+        //
         // Single block source — coordinator unifies manual + scheduled +
         // tag-derived blocks. Importantly the coordinator looks tag-blocks
         // up by packageName (not appInfo.tags), so shortcut launches whose
@@ -302,6 +294,23 @@ class AppRepositoryImpl @Inject constructor(
                 )
             }
         }
+
+        // Not blocked. Session-timer pre-check (ULT-78): if the package has
+        // the in-app reminder enabled and there is no session in progress,
+        // route the user to the duration picker instead of launching. The
+        // picker calls launchApp again after the session is started;
+        // isSessionActiveFor short-circuits this branch on that second
+        // call so the launch proceeds.
+        if (
+            !sessionTimerCoordinator.isSessionActiveFor(appInfo.packageName) &&
+            sessionTimerRepository.isReminderActiveFor(appInfo.packageName)
+        ) {
+            return LaunchResult.SessionDurationRequired(
+                packageName = appInfo.packageName,
+                appLabel = appInfo.label,
+            )
+        }
+
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             component = appInfo.componentName

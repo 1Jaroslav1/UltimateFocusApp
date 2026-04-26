@@ -115,7 +115,7 @@ class SessionExpiryEndToEndTest {
         job.cancel()
     }
 
-    /** Mirrors the side-effect dispatch in SessionExpiryRunner (Android-side). */
+    /** Mirrors the side-effect dispatch in BlockedAppAccessibilityService. */
     private suspend fun handle(effect: SessionExpiryEffect) {
         when (effect) {
             is SessionExpiryEffect.GoHomeOnly -> systemActions.goHome()

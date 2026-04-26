@@ -1,10 +1,11 @@
 /**
  * Watches the active session's clock and emits exactly one
- * SessionExpiryEffect when the session reaches zero. The Application
- * layer (SessionExpiryRunner) consumes the events and invokes the actual
- * Android side effects (goHome, block, start the overlay activity, post a
- * notification) so this class stays JVM-pure and unit-testable with
- * virtual time.
+ * SessionExpiryEffect when the session reaches zero. BlockedAppAccessibility-
+ * Service consumes the events and invokes the actual Android side effects
+ * (goHome, block, start the overlay activity, post a notification) — the
+ * AccessibilityService context is used so background activity launches
+ * work on Android 10+ (app-context launches are forbidden there). This
+ * class stays JVM-pure and unit-testable with virtual time.
  *
  * Latching by (packageName, startedEpochMs) ensures one effect per
  * session even if multiple ticks see remaining ≤ 0 before the

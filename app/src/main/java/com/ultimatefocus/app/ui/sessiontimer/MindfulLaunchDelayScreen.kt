@@ -52,11 +52,17 @@ fun MindfulLaunchDelayContent(state: MindfulLaunchDelayUiState) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Determinate progress: visibly fills from 0% (dot) to 100%
+            // (full ring) over the delay window. The progress lambda
+            // overload re-reads the StateFlow on each frame for smooth
+            // animation.
             CircularProgressIndicator(
+                progress = { state.progress },
                 modifier = Modifier
                     .size(96.dp)
                     .testTag("mindful_launch_delay_indicator"),
                 color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
                 strokeWidth = 6.dp,
             )
             Spacer(modifier = Modifier.height(32.dp))

@@ -79,7 +79,17 @@ class SessionDurationPickerViewModel @Inject constructor(
     private val _events = Channel<Event>(capacity = Channel.BUFFERED)
     val events = _events.receiveAsFlow()
 
+    private var bound = false
+
+    /**
+     * Initial setup. Idempotent — once the picker is bound for a given
+     * package, repeated calls (e.g. from a configuration change) are
+     * ignored so the user's in-flight selections (expanded panel state,
+     * mode override, custom-minutes input) survive.
+     */
     fun bind(packageName: String, appLabel: String, defaultMode: SessionExpiryMode) {
+        if (bound) return
+        bound = true
         _state.value = SessionDurationPickerUiState(
             packageName = packageName,
             appLabel = appLabel,

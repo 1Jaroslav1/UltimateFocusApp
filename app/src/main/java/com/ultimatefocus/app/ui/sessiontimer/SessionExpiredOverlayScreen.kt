@@ -81,11 +81,16 @@ fun SessionExpiredOverlayContent(
             )
             Spacer(modifier = Modifier.height(40.dp))
 
+            // Determinate progress: a dot at start (0%), a half-circle at
+            // 50%, a full ring at 100%. Mirrors the mindful-launch-delay
+            // overlay so both surfaces feel consistent.
             CircularProgressIndicator(
+                progress = { state.progress },
                 modifier = Modifier
                     .size(96.dp)
                     .testTag("session_expired_countdown_indicator"),
                 color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
                 strokeWidth = 6.dp,
             )
             Spacer(modifier = Modifier.height(16.dp))

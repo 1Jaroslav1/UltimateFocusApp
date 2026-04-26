@@ -30,6 +30,8 @@ data class SessionExpiredOverlayUiState(
     val appLabel: String = "",
     val secondsRemaining: Int = 0,
     val canExtend: Boolean = false,
+    /** Progress 0f..1f over the forced wait — 0f = dot, 1f = full circle. */
+    val progress: Float = 0f,
 )
 
 @HiltViewModel
@@ -54,19 +56,33 @@ class SessionExpiredOverlayViewModel @Inject constructor(
     fun bind(packageName: String, appLabel: String) {
         if (bound) return
         bound = true
+        val totalMs = SessionExpiredOverlayActivity.EXTEND_DELAY_MS
         _state.value = SessionExpiredOverlayUiState(
             packageName = packageName,
             appLabel = appLabel,
-            secondsRemaining = (SessionExpiredOverlayActivity.EXTEND_DELAY_MS / 1_000L).toInt(),
+            secondsRemaining = (totalMs / 1_000L).toInt(),
             canExtend = false,
+            progress = 0f,
         )
         viewModelScope.launch {
-            val totalSeconds = (SessionExpiredOverlayActivity.EXTEND_DELAY_MS / 1_000L).toInt()
-            for (sec in totalSeconds downTo 1) {
-                _state.value = _state.value.copy(secondsRemaining = sec)
-                delay(1_000L)
+            val tick = PROGRESS_TICK_MS
+            val startMs = System.currentTimeMillis()
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startMs
+                val ratio = (elapsed.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
+                val sec = ((totalMs - elapsed).toInt() / 1_000).coerceAtLeast(0)
+                _state.value = _state.value.copy(
+                    secondsRemaining = sec,
+                    progress = ratio,
+                )
+                if (elapsed >= totalMs) break
+                delay(tick)
             }
-            _state.value = _state.value.copy(secondsRemaining = 0, canExtend = true)
+            _state.value = _state.value.copy(
+                secondsRemaining = 0,
+                progress = 1f,
+                canExtend = true,
+            )
             _events.send(Event.CountdownDone)
         }
     }
@@ -82,5 +98,9 @@ class SessionExpiredOverlayViewModel @Inject constructor(
     fun cancel() {
         coordinator.endSession()
         viewModelScope.launch { _events.send(Event.Cancelled) }
+    }
+
+    private companion object {
+        const val PROGRESS_TICK_MS: Long = 32L
     }
 }
