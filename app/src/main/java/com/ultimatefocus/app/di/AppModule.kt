@@ -9,7 +9,10 @@
  * ULT-72/73 added tags + app_tags, ULT-75 added blocked_tags) wipe prior data.
  * Also binds AppUsageStatsRepository (UsageStatsManager-backed) so the
  * schedule editor can sort the app picker by weekly foreground usage.
- * Covers: ULT-5, ULT-16, ULT-17, ULT-18, ULT-20, ULT-24, ULT-72, ULT-73, ULT-75
+ * Also binds SessionTimerRepository — the In-App Reminder feature surface
+ * (global feature flags + per-app opt-in) — so the settings page and the
+ * launch interceptors share a single source of truth.
+ * Covers: ULT-5, ULT-16, ULT-17, ULT-18, ULT-20, ULT-24, ULT-72, ULT-73, ULT-75, ULT-76
  */
 package com.ultimatefocus.app.di
 
@@ -29,12 +32,14 @@ import com.ultimatefocus.app.data.repository.AppUsageStatsRepositoryImpl
 import com.ultimatefocus.app.data.repository.BlockedAppRepositoryImpl
 import com.ultimatefocus.app.data.repository.BlockedTagRepositoryImpl
 import com.ultimatefocus.app.data.repository.BlockingScheduleRepositoryImpl
+import com.ultimatefocus.app.data.repository.SessionTimerRepositoryImpl
 import com.ultimatefocus.app.data.repository.TagRepositoryImpl
 import com.ultimatefocus.app.data.system.SystemActionsImpl
 import com.ultimatefocus.app.domain.repository.AppUsageStatsRepository
 import com.ultimatefocus.app.domain.repository.BlockedAppRepository
 import com.ultimatefocus.app.domain.repository.BlockedTagRepository
 import com.ultimatefocus.app.domain.repository.BlockingScheduleRepository
+import com.ultimatefocus.app.domain.repository.SessionTimerRepository
 import com.ultimatefocus.app.domain.repository.TagRepository
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
 import com.ultimatefocus.app.domain.service.Clock
@@ -120,6 +125,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBlockedTagRepository(impl: BlockedTagRepositoryImpl): BlockedTagRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSessionTimerRepository(
+        impl: SessionTimerRepositoryImpl,
+    ): SessionTimerRepository
 
     @Binds
     @Singleton

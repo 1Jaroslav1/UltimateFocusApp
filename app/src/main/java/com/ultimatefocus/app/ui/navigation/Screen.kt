@@ -5,7 +5,9 @@
  * — the editor route accepts an optional `id` query param: absent / -1 means
  * "create a new schedule"; any other value loads an existing schedule for edit.
  * ManageTags is pushed from Settings (ULT-72) for tag CRUD.
- * Covers: ULT-5, ULT-7, ULT-24, ULT-25, ULT-72
+ * InAppReminder is pushed from Settings (ULT-76) for the In-App Time Reminder
+ * configuration page.
+ * Covers: ULT-5, ULT-7, ULT-24, ULT-25, ULT-72, ULT-76
  */
 package com.ultimatefocus.app.ui.navigation
 
@@ -20,4 +22,5 @@ sealed class Screen(val route: String) {
         fun routeFor(id: Long?): String = "blocking_schedule_editor?id=${id ?: NEW_ID}"
     }
     data object ManageTags : Screen("manage_tags")
+    data object InAppReminder : Screen("in_app_reminder")
 }

@@ -24,7 +24,7 @@
  *     NavHost's own BackHandler pops the back stack, so the OS edge-swipe-back
  *     gesture navigates back exactly like in other Android apps.
  *
- * Covers: ULT-5, ULT-6, ULT-7, ULT-8, ULT-23, ULT-24, ULT-25, ULT-72
+ * Covers: ULT-5, ULT-6, ULT-7, ULT-8, ULT-23, ULT-24, ULT-25, ULT-72, ULT-76
  */
 package com.ultimatefocus.app.ui.navigation
 
@@ -48,6 +48,7 @@ import com.ultimatefocus.app.ui.blocking.BlockingScheduleEditorScreen
 import com.ultimatefocus.app.ui.blocking.BlockingSchedulesListScreen
 import com.ultimatefocus.app.ui.drawer.AppDrawerScreen
 import com.ultimatefocus.app.ui.home.HomeScreen
+import com.ultimatefocus.app.ui.sessiontimer.InAppReminderScreen
 import com.ultimatefocus.app.ui.settings.SettingsScreen
 import com.ultimatefocus.app.ui.tags.ManageTagsScreen
 import kotlinx.coroutines.launch
@@ -126,6 +127,23 @@ fun NavGraph(navController: NavHostController) {
                         launchSingleTop = true
                     }
                 },
+                onNavigateToInAppReminder = {
+                    navController.navigate(Screen.InAppReminder.route) {
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
+
+        composable(
+            route = Screen.InAppReminder.route,
+            enterTransition = { slideInHorizontally(initialOffsetX = { it }) },
+            exitTransition = { slideOutHorizontally(targetOffsetX = { -it }) },
+            popEnterTransition = { slideInHorizontally(initialOffsetX = { -it }) },
+            popExitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+        ) {
+            InAppReminderScreen(
+                onNavigateBack = { navController.popBackStack() },
             )
         }
 
