@@ -13,10 +13,11 @@
  *   user-named schedule.
  * - launchApp enforces blocks: when the target app has an active block
  *   it returns LaunchResult.Blocked instead of starting the intent. The
- *   caller routes the user to BlockedAppActivity (ULT-21). The block
- *   gate consults the coordinator first (manual/scheduled), then falls
- *   back to the tag-block source so tag-blocked launches go through
- *   the same reminder flow.
+ *   caller routes the user to BlockedAppActivity (ULT-21). All three
+ *   block sources (manual / scheduled / tag-derived) are routed through
+ *   BlockingSourceCoordinator.activeBlockInfo so that bottom-bar
+ *   shortcut launches — whose AppInfo comes from resolveDefault() and
+ *   has no tags populated — are still tag-block-gated.
  * - Registers a LauncherApps callback so the list auto-refreshes on
  *   installs/removals; on removal also calls
  *   BlockingScheduleRepository.purgePackage to keep schedule junctions tidy.
@@ -243,10 +244,14 @@ class AppRepositoryImpl @Inject constructor(
     }
 
     override suspend fun launchApp(appInfo: AppInfo): LaunchResult {
+        // Single block source — coordinator unifies manual + scheduled +
+        // tag-derived blocks. Importantly the coordinator looks tag-blocks
+        // up by packageName (not appInfo.tags), so shortcut launches whose
+        // AppInfo comes from resolveDefault() — which doesn't populate
+        // tags — are still gated correctly.
         val info = coordinator.activeBlockInfo(appInfo.packageName)
-        val now = clock.now()
         if (info != null) {
-            val remaining = (info.blockedUntilEpochMs - now).coerceAtLeast(0L)
+            val remaining = (info.blockedUntilEpochMs - clock.now()).coerceAtLeast(0L)
             return when (info) {
                 is ActiveBlockInfo.Manual -> LaunchResult.Blocked(
                     packageName = appInfo.packageName,
@@ -262,22 +267,14 @@ class AppRepositoryImpl @Inject constructor(
                     durationLabel = "",
                     scheduleName = info.scheduleName,
                 )
+                is ActiveBlockInfo.Tag -> LaunchResult.Blocked(
+                    packageName = appInfo.packageName,
+                    appLabel = appInfo.label,
+                    remainingMs = remaining,
+                    durationLabel = info.durationLabel,
+                    scheduleName = null,
+                )
             }
-        }
-        // Tag-block fallback (ULT-75). Walk this app's tags and pick the
-        // latest active tag-block expiry; if any tag is currently blocked,
-        // surface the same Blocked result so the reminder screen renders.
-        val tagBlock = appInfo.tags
-            .mapNotNull { blockedTagRepository.getActive(it.id) }
-            .maxByOrNull { it.blockedUntilEpochMs }
-        if (tagBlock != null) {
-            return LaunchResult.Blocked(
-                packageName = appInfo.packageName,
-                appLabel = appInfo.label,
-                remainingMs = (tagBlock.blockedUntilEpochMs - now).coerceAtLeast(0L),
-                durationLabel = tagBlock.durationLabel,
-                scheduleName = null,
-            )
         }
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)

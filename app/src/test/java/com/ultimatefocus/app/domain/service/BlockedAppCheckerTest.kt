@@ -46,8 +46,13 @@ class BlockedAppCheckerTest {
         scheduleRepo = FakeBlockingScheduleRepository(clock, zoneProvider)
         tagBlockRepo = FakeBlockedTagRepository(clock)
         tagRepo = FakeTagRepository()
-        val coordinator = BlockingSourceCoordinator(manualRepo, scheduleRepo)
-        checker = BlockedAppChecker(coordinator, tagBlockRepo, tagRepo)
+        val coordinator = BlockingSourceCoordinator(
+            manualRepository = manualRepo,
+            scheduleRepository = scheduleRepo,
+            blockedTagRepository = tagBlockRepo,
+            tagRepository = tagRepo,
+        )
+        checker = BlockedAppChecker(coordinator)
     }
 
     // ── Manual blocks (ULT-22) ──────────────────────────────────────────────

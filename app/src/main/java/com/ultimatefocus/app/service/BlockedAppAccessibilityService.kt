@@ -5,14 +5,15 @@
  * the user is redirected to BlockedAppActivity on top.
  *
  * Reads the "currently blocked packages" set from BlockingSourceCoordinator
- * which unifies manual blocks (ULT-20) and recurring schedules (ULT-24) into
- * a single Set<String>. The hot-path event handler checks an in-memory copy
- * to avoid a DB hit per window transition.
+ * which unifies manual blocks (ULT-20), recurring schedules (ULT-24), and
+ * tag-derived blocks (ULT-75) into a single Set<String>. The hot-path
+ * event handler checks an in-memory copy to avoid a DB hit per window
+ * transition.
  *
  * Debounce + system-UI / own-package exclusion live in
  * BlockedAppForegroundHandler so they can be unit-tested without booting the
  * service lifecycle.
- * Covers: ULT-20, ULT-21, ULT-24
+ * Covers: ULT-20, ULT-21, ULT-24, ULT-75
  */
 package com.ultimatefocus.app.service
 
@@ -107,6 +108,14 @@ class BlockedAppAccessibilityService : AccessibilityService() {
                 blockedUntilEpochMs = info.blockedUntilEpochMs,
                 durationLabel = "",
                 scheduleName = info.scheduleName,
+            )
+            is ActiveBlockInfo.Tag -> BlockedAppActivity.intent(
+                context = this,
+                packageName = pkg,
+                appLabel = label,
+                blockedUntilEpochMs = info.blockedUntilEpochMs,
+                durationLabel = info.durationLabel,
+                scheduleName = null,
             )
         }.apply {
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
