@@ -11,9 +11,12 @@ package com.ultimatefocus.app.ui.sessiontimer
 
 import android.content.ComponentName
 import app.cash.turbine.test
+import com.ultimatefocus.app.data.local.dao.FakeSessionTimerAppDao
 import com.ultimatefocus.app.data.repository.FakeAppRepository
+import com.ultimatefocus.app.data.repository.SessionTimerRepositoryImpl
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.SessionExpiryMode
+import com.ultimatefocus.app.domain.repository.FakeUserPreferencesSource
 import com.ultimatefocus.app.domain.service.FakeClock
 import com.ultimatefocus.app.domain.service.SessionTimerCoordinator
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +39,8 @@ class SessionDurationPickerViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakeApps: FakeAppRepository
     private lateinit var coordinator: SessionTimerCoordinator
+    private lateinit var fakePrefs: FakeUserPreferencesSource
+    private lateinit var sessionTimerRepository: SessionTimerRepositoryImpl
     private lateinit var viewModel: SessionDurationPickerViewModel
 
     @Before
@@ -43,7 +48,17 @@ class SessionDurationPickerViewModelTest {
         Dispatchers.setMain(testDispatcher)
         fakeApps = FakeAppRepository()
         coordinator = SessionTimerCoordinator(FakeClock(current = 1_000L))
-        viewModel = SessionDurationPickerViewModel(fakeApps, coordinator)
+        fakePrefs = FakeUserPreferencesSource()
+        sessionTimerRepository = SessionTimerRepositoryImpl(
+            fakePrefs,
+            FakeSessionTimerAppDao(),
+            FakeClock(current = 1_000L),
+        )
+        viewModel = SessionDurationPickerViewModel(
+            fakeApps,
+            coordinator,
+            sessionTimerRepository,
+        )
         viewModel.bind("com.alpha", "Alpha App", SessionExpiryMode.EXIT_APP)
         fakeApps.setApps(
             listOf(
@@ -164,6 +179,44 @@ class SessionDurationPickerViewModelTest {
     }
 
     // ── Border cases ─────────────────────────────────────────────────────────
+
+    // ── Mindful launch delay (ULT-79) ────────────────────────────────────────
+
+    @Test
+    fun confirmPreset_emitsLaunchAfterDelayWhenMindfulDelayOn() = runTest {
+        sessionTimerRepository.updateMindfulLaunchDelay(true)
+        viewModel.events.test {
+            viewModel.confirmPreset(5)
+            val event = awaitItem()
+            assertTrue(event is SessionDurationPickerViewModel.Event.LaunchAfterDelay)
+            assertEquals(
+                "com.alpha",
+                (event as SessionDurationPickerViewModel.Event.LaunchAfterDelay).packageName,
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun confirmPreset_emitsLaunchTargetWhenMindfulDelayOff() = runTest {
+        sessionTimerRepository.updateMindfulLaunchDelay(false)
+        viewModel.events.test {
+            viewModel.confirmPreset(5)
+            assertTrue(awaitItem() is SessionDurationPickerViewModel.Event.LaunchTarget)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun confirmCustom_emitsLaunchAfterDelayWhenMindfulDelayOn() = runTest {
+        sessionTimerRepository.updateMindfulLaunchDelay(true)
+        viewModel.onCustomMinutesChange("17")
+        viewModel.events.test {
+            viewModel.confirmCustom()
+            assertTrue(awaitItem() is SessionDurationPickerViewModel.Event.LaunchAfterDelay)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 
     @Test
     fun perSessionMode_doesNotMutateGlobalDefault() {

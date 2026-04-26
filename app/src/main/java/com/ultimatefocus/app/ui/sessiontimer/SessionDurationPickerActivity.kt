@@ -57,6 +57,19 @@ class SessionDurationPickerActivity : ComponentActivity() {
                         viewModel.launchTarget()
                         finish()
                     }
+                    is SessionDurationPickerViewModel.Event.LaunchAfterDelay -> {
+                        // Picker → mindful launch delay overlay (ULT-79).
+                        // The delay activity is responsible for completing
+                        // the launch after its animation finishes.
+                        startActivity(
+                            MindfulLaunchDelayActivity.intent(
+                                context = this@SessionDurationPickerActivity,
+                                packageName = event.packageName,
+                                appLabel = event.appLabel,
+                            ),
+                        )
+                        finish()
+                    }
                     SessionDurationPickerViewModel.Event.Cancelled -> finish()
                 }
             }

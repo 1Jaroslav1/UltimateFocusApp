@@ -64,6 +64,18 @@
             android:noHistory="true"
             android:theme="@style/Theme.UltimateFocus" />
 
+        <!-- ULT-79: mindful launch delay overlay shown after the duration
+             picker when the user has the "Mindful Launch Delay" toggle on.
+             noHistory so the overlay never appears in recents and back-press
+             from the target app does not return to it. -->
+        <activity
+            android:name=".ui.sessiontimer.MindfulLaunchDelayActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.UltimateFocus" />
+
         <receiver
             android:name=".receiver.PackageChangeReceiver"
             android:exported="false">

@@ -27,6 +27,7 @@ import androidx.lifecycle.viewModelScope
 import com.ultimatefocus.app.data.repository.AppRepository
 import com.ultimatefocus.app.domain.model.SessionDurationMinutes
 import com.ultimatefocus.app.domain.model.SessionExpiryMode
+import com.ultimatefocus.app.domain.repository.SessionTimerRepository
 import com.ultimatefocus.app.domain.service.SessionTimerCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -51,10 +52,24 @@ data class SessionDurationPickerUiState(
 class SessionDurationPickerViewModel @Inject constructor(
     private val appRepository: AppRepository,
     private val coordinator: SessionTimerCoordinator,
+    private val sessionTimerRepository: SessionTimerRepository,
 ) : ViewModel() {
 
     sealed interface Event {
+        /**
+         * Open the target app immediately (no mindful delay configured). The
+         * activity hosting the picker calls launchTarget() and finishes.
+         */
         data class LaunchTarget(val packageName: String) : Event
+
+        /**
+         * Route through the mindful launch delay overlay (ULT-79). The
+         * activity starts MindfulLaunchDelayActivity and finishes; the delay
+         * activity is responsible for completing the launch after the
+         * animation finishes.
+         */
+        data class LaunchAfterDelay(val packageName: String, val appLabel: String) : Event
+
         data object Cancelled : Event
     }
 
@@ -128,6 +143,17 @@ class SessionDurationPickerViewModel @Inject constructor(
             durationMinutes = duration.value,
             expiryMode = s.selectedMode,
         )
-        viewModelScope.launch { _events.send(Event.LaunchTarget(s.packageName)) }
+        viewModelScope.launch {
+            // Read the global mindful-launch-delay flag at confirmation time
+            // — the user could have just toggled it from the In-App Reminder
+            // settings page, and we want the freshest value.
+            val delay = sessionTimerRepository.observeSettings().first().mindfulLaunchDelay
+            val event = if (delay) {
+                Event.LaunchAfterDelay(packageName = s.packageName, appLabel = s.appLabel)
+            } else {
+                Event.LaunchTarget(packageName = s.packageName)
+            }
+            _events.send(event)
+        }
     }
 }
