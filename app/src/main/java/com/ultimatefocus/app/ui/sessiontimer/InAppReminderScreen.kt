@@ -30,8 +30,8 @@ package com.ultimatefocus.app.ui.sessiontimer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,12 +39,13 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.HorizontalDivider
@@ -99,82 +100,107 @@ fun InAppReminderContent(
     onAppToggle: (String, Boolean) -> Unit,
 ) {
     val settings = state.settings
-    Column(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .testTag("in_app_reminder_screen"),
     ) {
-        TopBar(onNavigateBack = onNavigateBack)
+        // The apps section (search + list) takes a fixed 40% of the available
+        // screen height; the controls section takes the remaining 60% and
+        // scrolls internally if it overflows on small screens.
+        val appsSectionHeight = maxHeight * 0.4f
 
-        SettingsRow(
-            title = "In-app time reminder active",
-            subtitle = "Prompt yourself to commit a duration before opening selected apps.",
-            trailing = {
-                Switch(
-                    checked = settings.masterEnabled,
-                    onCheckedChange = onSetMaster,
-                    modifier = Modifier.testTag("in_app_reminder_master_switch"),
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopBar(onNavigateBack = onNavigateBack)
+
+            // Controls — scroll internally so the apps section stays pinned
+            // at its 40% and is never pushed off-screen.
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                CompactSettingsRow(
+                    title = "In-app time reminder active",
+                    trailing = {
+                        Switch(
+                            checked = settings.masterEnabled,
+                            onCheckedChange = onSetMaster,
+                            modifier = Modifier.testTag("in_app_reminder_master_switch"),
+                        )
+                    },
                 )
-            },
-        )
+                ThinDivider()
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
-
-        DependentBlock(masterEnabled = settings.masterEnabled) {
-            SettingsRow(
-                title = "Precision Mode",
-                subtitle = if (settings.precisionMode) "Active" else "Inactive",
-                onClick = if (settings.masterEnabled) onTogglePrecision else null,
-                modifier = Modifier.testTag("in_app_reminder_precision_row"),
-            )
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
-
-            SettingsRow(
-                title = "Mindful Launch Delay",
-                subtitle = "Show a brief loading animation before each opted-in app opens.",
-                trailing = {
-                    Switch(
-                        checked = settings.mindfulLaunchDelay,
-                        enabled = settings.masterEnabled,
-                        onCheckedChange = onSetMindfulLaunchDelay,
-                        modifier = Modifier.testTag("in_app_reminder_mindful_delay_switch"),
+                DependentBlock(masterEnabled = settings.masterEnabled) {
+                    CompactSettingsRow(
+                        title = "Precision Mode",
+                        subtitle = if (settings.precisionMode) "Active" else "Inactive",
+                        onClick = if (settings.masterEnabled) onTogglePrecision else null,
+                        modifier = Modifier.testTag("in_app_reminder_precision_row"),
                     )
-                },
-            )
+                    ThinDivider()
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
+                    CompactSettingsRow(
+                        title = "Mindful Launch Delay",
+                        trailing = {
+                            Switch(
+                                checked = settings.mindfulLaunchDelay,
+                                enabled = settings.masterEnabled,
+                                onCheckedChange = onSetMindfulLaunchDelay,
+                                modifier = Modifier
+                                    .testTag("in_app_reminder_mindful_delay_switch"),
+                            )
+                        },
+                    )
+                    ThinDivider()
 
-            SectionHeader("When the session ends")
-            ExpiryModeRadioGroup(
-                selected = settings.expiryMode,
-                enabled = settings.masterEnabled,
-                onSelect = onSelectExpiryMode,
-            )
+                    CompactSectionHeader("When the session ends")
+                    ExpiryModeRadioGroup(
+                        selected = settings.expiryMode,
+                        enabled = settings.masterEnabled,
+                        onSelect = onSelectExpiryMode,
+                    )
+                }
+            }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
+            // Apps section — fixed 40% height. Header + filter field + list
+            // share this space; the list takes whatever is left after the
+            // first two are laid out.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(appsSectionHeight)
+                    .testTag("in_app_reminder_apps_section"),
+            ) {
+                ThinDivider()
+                CompactSectionHeader("Apps")
+                AppFilterField(
+                    query = state.query,
+                    onQueryChange = onQueryChange,
+                    testTag = "in_app_reminder_filter_field",
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                AppList(
+                    visibleApps = state.visibleApps,
+                    totalAppCount = state.totalAppCount,
+                    masterEnabled = settings.masterEnabled,
+                    onToggle = onAppToggle,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                )
+            }
         }
-
-        SectionHeader("Apps")
-        AppFilterField(
-            query = state.query,
-            onQueryChange = onQueryChange,
-            testTag = "in_app_reminder_filter_field",
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        AppList(
-            visibleApps = state.visibleApps,
-            totalAppCount = state.totalAppCount,
-            masterEnabled = settings.masterEnabled,
-            onToggle = onAppToggle,
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
     }
+}
+
+@Composable
+private fun ThinDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
 }
 
 @Composable
@@ -183,13 +209,12 @@ private fun AppList(
     totalAppCount: Int,
     masterEnabled: Boolean,
     onToggle: (String, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     if (totalAppCount == 0) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 120.dp)
+            modifier = modifier
                 .padding(horizontal = 32.dp, vertical = 16.dp)
                 .testTag("in_app_reminder_apps_loading"),
         ) {
@@ -205,9 +230,7 @@ private fun AppList(
     if (visibleApps.isEmpty()) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 120.dp)
+            modifier = modifier
                 .padding(horizontal = 32.dp, vertical = 16.dp)
                 .testTag("in_app_reminder_apps_empty"),
         ) {
@@ -221,9 +244,7 @@ private fun AppList(
         return
     }
     LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 120.dp, max = 480.dp)
+        modifier = modifier
             .alpha(if (masterEnabled) 1f else DISABLED_ALPHA)
             .testTag("in_app_reminder_apps_list"),
     ) {
@@ -241,10 +262,9 @@ private fun AppRow(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp)
+            .padding(horizontal = 24.dp, vertical = 8.dp)
             .testTag("in_app_reminder_app_row_${row.packageName}"),
     ) {
         Text(
@@ -316,7 +336,7 @@ private fun ExpiryModeRadioGroup(
                 .then(
                     if (enabled) Modifier.clickable { onSelect(option.mode) } else Modifier,
                 )
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
                 .testTag("in_app_reminder_mode_row_${option.mode.name}"),
         ) {
             RadioButton(
@@ -325,35 +345,35 @@ private fun ExpiryModeRadioGroup(
                 onClick = if (enabled) ({ onSelect(option.mode) }) else null,
                 modifier = Modifier.testTag("in_app_reminder_mode_radio_${option.mode.name}"),
             )
-            Column(modifier = Modifier.padding(start = 8.dp)) {
-                Text(
-                    text = option.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    text = option.subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = option.title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(start = 8.dp),
+            )
         }
     }
 }
 
 @Composable
-private fun SectionHeader(title: String) {
+private fun CompactSectionHeader(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
     )
 }
 
+/**
+ * Compact variant of the standard settings row used elsewhere in the app.
+ * Drops the multi-line subtitle support and tightens the vertical padding
+ * so the In-App Reminder controls fit comfortably in the 60% above the
+ * fixed-height apps section.
+ */
 @Composable
-private fun SettingsRow(
+private fun CompactSettingsRow(
     title: String,
     subtitle: String? = null,
     onClick: (() -> Unit)? = null,
@@ -365,7 +385,7 @@ private fun SettingsRow(
         modifier = modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(horizontal = 24.dp, vertical = 8.dp),
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -376,9 +396,8 @@ private fun SettingsRow(
             if (subtitle != null) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
         }
@@ -389,30 +408,13 @@ private fun SettingsRow(
 private data class ReminderExpiryOption(
     val mode: SessionExpiryMode,
     val title: String,
-    val subtitle: String,
 )
 
 private val EXPIRY_OPTIONS = listOf(
-    ReminderExpiryOption(
-        mode = SessionExpiryMode.MINDFUL_EXTENSION_DELAY,
-        title = "Mindful extension delay",
-        subtitle = "Force a short wait before allowing a session extension.",
-    ),
-    ReminderExpiryOption(
-        mode = SessionExpiryMode.EXIT_APP,
-        title = "Exit app when time is over",
-        subtitle = "Automatically return to the home screen when the timer hits zero.",
-    ),
-    ReminderExpiryOption(
-        mode = SessionExpiryMode.EXIT_AND_BLOCK,
-        title = "Exit app and block",
-        subtitle = "Close the app and block it for the same duration just used.",
-    ),
-    ReminderExpiryOption(
-        mode = SessionExpiryMode.ONLY_REMINDER,
-        title = "Only reminder",
-        subtitle = "Show a notification — take no automatic action.",
-    ),
+    ReminderExpiryOption(SessionExpiryMode.MINDFUL_EXTENSION_DELAY, "Mindful extension delay"),
+    ReminderExpiryOption(SessionExpiryMode.EXIT_APP, "Exit app when time is over"),
+    ReminderExpiryOption(SessionExpiryMode.EXIT_AND_BLOCK, "Exit app and block"),
+    ReminderExpiryOption(SessionExpiryMode.ONLY_REMINDER, "Only reminder"),
 )
 
 private const val DISABLED_ALPHA = 0.4f
