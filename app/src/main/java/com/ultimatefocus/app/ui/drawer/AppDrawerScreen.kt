@@ -109,7 +109,7 @@ fun AppDrawerScreen(
                     context = launchContext,
                     packageName = event.packageName,
                     appLabel = event.appLabel,
-                    defaultMode = viewModel.defaultExpiryMode.value,
+                    defaultMode = event.defaultMode,
                 ),
             )
         }

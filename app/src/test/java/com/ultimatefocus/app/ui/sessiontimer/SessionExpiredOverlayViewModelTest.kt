@@ -1,13 +1,11 @@
 /**
- * Unit tests for SessionExpiredOverlayViewModel — the Mode 1 "mindful
- * extension delay" overlay (ULT-81). Verifies:
- *  - bind initializes the countdown and starts the timer.
- *  - canExtend stays false until the timer elapses; CountdownDone fires
- *    once at the end.
- *  - extend() while disabled is a no-op; extend() after countdown
- *    routes through ExtendRequested and clears the active session so
- *    the picker can re-prompt.
- *  - cancel() clears the session and emits Cancelled.
+ * Unit tests for SessionExpiredOverlayViewModel — the loader-only Mode 1
+ * overlay (ULT-81). Verifies:
+ *  - bind initializes state, clears the active session, and starts the
+ *    progress timer.
+ *  - progress crosses from 0f to 1f over EXTEND_DELAY_MS and the Done
+ *    event fires exactly once at the end.
+ *  - rebinding while a countdown is in flight is a no-op.
  *
  * Covers: ULT-81
  */
@@ -27,7 +25,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -44,8 +41,6 @@ class SessionExpiredOverlayViewModelTest {
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         coordinator = SessionTimerCoordinator(FakeClock(current = 1_000L))
-        // Pre-populate an active session so cancel/extend exercise the
-        // coordinator clear path.
         coordinator.startSession(
             "com.alpha",
             "Alpha",
@@ -59,60 +54,33 @@ class SessionExpiredOverlayViewModelTest {
     fun tearDown() { Dispatchers.resetMain() }
 
     @Test
-    fun bind_setsInitialStateAndStartsCountdown() = runTest {
+    fun bind_setsInitialStateAndClearsActiveSession() = runTest {
         viewModel.bind("com.alpha", "Alpha")
         val s = viewModel.state.value
         assertEquals("com.alpha", s.packageName)
-        assertEquals(20, s.secondsRemaining) // EXTEND_DELAY_MS / 1000
-        assertFalse(s.canExtend)
+        assertEquals(0f, s.progress, 0.001f)
+        assertNull(coordinator.active.value)
     }
 
     @Test
-    fun extend_isNoOpUntilCountdownDone() = runTest {
-        viewModel.bind("com.alpha", "Alpha")
-        viewModel.extend()
-        // Coordinator's session should NOT have been cleared.
-        assertEquals("com.alpha", coordinator.active.value?.packageName)
-    }
-
-    @Test
-    fun countdown_completesAndEmitsCountdownDone() = runTest {
+    fun progress_crossesToOneAndDoneFires() = runTest {
         viewModel.events.test {
             viewModel.bind("com.alpha", "Alpha")
             advanceTimeBy(SessionExpiredOverlayActivity.EXTEND_DELAY_MS + 100L)
-            assertEquals(SessionExpiredOverlayViewModel.Event.CountdownDone, awaitItem())
+            assertEquals(SessionExpiredOverlayViewModel.Event.Done, awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
-        assertTrue(viewModel.state.value.canExtend)
+        assertEquals(1f, viewModel.state.value.progress, 0.001f)
     }
 
     @Test
-    fun extend_afterCountdown_emitsExtendRequestedAndClearsSession() = runTest {
+    fun progress_isPartialMidway() = runTest {
         viewModel.bind("com.alpha", "Alpha")
+        advanceTimeBy(SessionExpiredOverlayActivity.EXTEND_DELAY_MS / 2)
         advanceUntilIdle()
-        viewModel.events.test {
-            viewModel.extend()
-            assertEquals(SessionExpiredOverlayViewModel.Event.ExtendRequested, awaitItem())
-            cancelAndIgnoreRemainingEvents()
-        }
-        assertNull(coordinator.active.value)
-    }
-
-    @Test
-    fun cancel_emitsCancelledAndClearsSession() = runTest {
-        viewModel.events.test {
-            viewModel.bind("com.alpha", "Alpha")
-            viewModel.cancel()
-            // Drain the CountdownDone event if it fires later.
-            // Cancel is the second event we care about.
-            val first = awaitItem()
-            assertTrue(
-                first == SessionExpiredOverlayViewModel.Event.Cancelled ||
-                    first == SessionExpiredOverlayViewModel.Event.CountdownDone,
-            )
-            cancelAndIgnoreRemainingEvents()
-        }
-        assertNull(coordinator.active.value)
+        val midProgress = viewModel.state.value.progress
+        assertTrue("progress should advance past 0", midProgress > 0f)
+        assertTrue("progress should not yet be 1", midProgress < 1f)
     }
 
     @Test

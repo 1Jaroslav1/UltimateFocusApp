@@ -188,19 +188,27 @@ fun SessionDurationPickerContent(
 
 @Composable
 private fun PresetGrid(onConfirm: (Int) -> Unit) {
-    // Single horizontal row of 4 buttons — tighter than the 2x2 grid and
-    // matches the AC ("4 preset buttons: 1 min, 5 min, 10 min, 15 min")
-    // visually as a quick-access strip.
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    // 2 rows × 2 buttons: row 1 = 1 min / 5 min, row 2 = 10 min / 15 min.
+    // Wider buttons read better than a single 4-up strip and match the
+    // user's preferred layout.
+    Column(
         modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SessionDurationMinutes.PRESETS.forEach { minutes ->
-            PresetButton(
-                minutes = minutes,
-                onClick = { onConfirm(minutes) },
-                modifier = Modifier.weight(1f),
-            )
+        SessionDurationMinutes.PRESETS.chunked(2).forEach { rowItems ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                rowItems.forEach { minutes ->
+                    PresetButton(
+                        minutes = minutes,
+                        onClick = { onConfirm(minutes) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (rowItems.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
         }
     }
 }

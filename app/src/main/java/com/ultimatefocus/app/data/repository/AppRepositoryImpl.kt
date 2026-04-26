@@ -64,6 +64,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -305,9 +306,13 @@ class AppRepositoryImpl @Inject constructor(
             !sessionTimerCoordinator.isSessionActiveFor(appInfo.packageName) &&
             sessionTimerRepository.isReminderActiveFor(appInfo.packageName)
         ) {
+            // Read the freshest default mode here (suspending into DataStore)
+            // so the picker is never bound with a stale Compose-state value.
+            val defaultMode = sessionTimerRepository.observeSettings().first().expiryMode
             return LaunchResult.SessionDurationRequired(
                 packageName = appInfo.packageName,
                 appLabel = appInfo.label,
+                defaultMode = defaultMode,
             )
         }
 

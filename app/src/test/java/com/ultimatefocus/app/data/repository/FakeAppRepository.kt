@@ -29,6 +29,14 @@ class FakeAppRepository : AppRepository {
     /** If non-null, launchApp returns this SessionDurationRequired instead of launching. */
     var sessionRequiredResultFor: (String) -> LaunchResult.SessionDurationRequired? = { null }
 
+    /**
+     * The default expiry mode the picker should default to. Tests can
+     * override this to verify per-mode behavior; LaunchResult constructed
+     * here carries it through.
+     */
+    var defaultPickerMode: com.ultimatefocus.app.domain.model.SessionExpiryMode =
+        com.ultimatefocus.app.domain.model.SessionExpiryMode.ONLY_REMINDER
+
     /** Defaults returned by resolveShortcut when the override is null or cannot be matched. */
     val defaultShortcuts: MutableMap<ShortcutSlot, AppInfo?> =
         mutableMapOf(ShortcutSlot.LEFT to null, ShortcutSlot.RIGHT to null)

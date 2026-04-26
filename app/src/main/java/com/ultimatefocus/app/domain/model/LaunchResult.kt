@@ -30,5 +30,14 @@ sealed interface LaunchResult {
     data class SessionDurationRequired(
         val packageName: String,
         val appLabel: String,
+        /**
+         * The user's globally-configured default expiry mode at the moment
+         * launchApp() was called. Carried with the result so the picker
+         * activity always sees a fresh value — relying on the launcher
+         * Compose state would otherwise risk a stale read during the brief
+         * window between process start and the DataStore Flow's first
+         * emission.
+         */
+        val defaultMode: SessionExpiryMode,
     ) : LaunchResult
 }

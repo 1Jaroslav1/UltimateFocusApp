@@ -53,6 +53,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -155,7 +156,8 @@ class BlockedAppAccessibilityService : AccessibilityService() {
                 }
             }
             is SessionExpiryEffect.ShowReminderOnly -> {
-                val text = "Session ended for ${effect.appLabel.ifBlank { "this app" }}"
+                val target = effect.appLabel.ifBlank { "this app" }
+                val text = "You spent ${effect.minutesSpent} min in $target"
                 mainHandler.post {
                     Toast.makeText(applicationContext, text, Toast.LENGTH_LONG).show()
                 }
@@ -234,16 +236,21 @@ class BlockedAppAccessibilityService : AccessibilityService() {
         startActivity(intent)
     }
 
-    private fun showDurationPicker(pkg: String) {
+    private suspend fun showDurationPicker(pkg: String) {
         val label = runCatching {
             val pm = packageManager
             pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
         }.getOrDefault(pkg)
+        // Read the latest default mode from the repository here rather than
+        // the cached @Volatile field — guarantees we never use a stale
+        // value during the brief window between settings change and the
+        // Flow's next emission.
+        val freshDefault = sessionTimerRepository.observeSettings().first().expiryMode
         val intent = SessionDurationPickerActivity.intent(
             context = this,
             packageName = pkg,
             appLabel = label,
-            defaultMode = defaultExpiryMode,
+            defaultMode = freshDefault,
         ).apply {
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }

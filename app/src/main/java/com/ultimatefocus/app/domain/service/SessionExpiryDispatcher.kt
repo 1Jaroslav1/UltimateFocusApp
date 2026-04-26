@@ -44,6 +44,12 @@ sealed interface SessionExpiryEffect {
     data class ShowReminderOnly(
         override val packageName: String,
         override val appLabel: String,
+        /**
+         * The duration (in minutes) the user committed to and spent in
+         * the session — surfaced in the Toast so the popup carries the
+         * "how much time was spent" information per the AC.
+         */
+        val minutesSpent: Int,
     ) : SessionExpiryEffect
 }
 
@@ -65,6 +71,7 @@ object SessionExpiryDispatcher {
         SessionExpiryMode.ONLY_REMINDER -> SessionExpiryEffect.ShowReminderOnly(
             packageName = session.packageName,
             appLabel = session.appLabel,
+            minutesSpent = session.durationMinutes,
         )
     }
 }

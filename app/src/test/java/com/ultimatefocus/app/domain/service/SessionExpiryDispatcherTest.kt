@@ -51,9 +51,12 @@ class SessionExpiryDispatcherTest {
     }
 
     @Test
-    fun onlyReminder_mapsToShowReminderOnly() {
-        val effect = SessionExpiryDispatcher.effectFor(session(SessionExpiryMode.ONLY_REMINDER))
+    fun onlyReminder_mapsToShowReminderOnlyWithMinutesSpent() {
+        val effect = SessionExpiryDispatcher.effectFor(
+            session(SessionExpiryMode.ONLY_REMINDER, durationMinutes = 7),
+        )
         assertTrue(effect is SessionExpiryEffect.ShowReminderOnly)
+        assertEquals(7, (effect as SessionExpiryEffect.ShowReminderOnly).minutesSpent)
     }
 
     @Test

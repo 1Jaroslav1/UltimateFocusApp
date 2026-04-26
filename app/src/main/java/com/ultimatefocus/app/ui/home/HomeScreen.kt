@@ -109,7 +109,7 @@ fun HomeScreen(
                     context = context,
                     packageName = event.packageName,
                     appLabel = event.appLabel,
-                    defaultMode = preferences.inAppReminderExpiryMode,
+                    defaultMode = event.defaultMode,
                 ),
             )
         }
