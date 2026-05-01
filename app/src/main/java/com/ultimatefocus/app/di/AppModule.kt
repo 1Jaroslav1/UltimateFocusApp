@@ -43,7 +43,9 @@ import com.ultimatefocus.app.domain.repository.BlockingScheduleRepository
 import com.ultimatefocus.app.domain.repository.SessionTimerRepository
 import com.ultimatefocus.app.domain.repository.TagRepository
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
+import com.ultimatefocus.app.domain.service.AppCategoryResolver
 import com.ultimatefocus.app.domain.service.Clock
+import com.ultimatefocus.app.domain.service.PackageManagerCategoryResolver
 import com.ultimatefocus.app.domain.service.SystemActions
 import com.ultimatefocus.app.domain.service.SystemClock
 import com.ultimatefocus.app.domain.service.SystemZoneIdProvider
@@ -144,4 +146,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindZoneIdProvider(impl: SystemZoneIdProvider): ZoneIdProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindAppCategoryResolver(
+        impl: PackageManagerCategoryResolver,
+    ): AppCategoryResolver
 }

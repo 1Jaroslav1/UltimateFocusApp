@@ -19,10 +19,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class FakeUserPreferencesSource : UserPreferencesSource {
 
     private val _preferences = MutableStateFlow(UserPreferences())
+    private val _categoriesSeeded = MutableStateFlow(false)
 
     override val preferences: Flow<UserPreferences> = _preferences
 
+    override val categoriesSeeded: Flow<Boolean> = _categoriesSeeded
+
     fun setPreferences(prefs: UserPreferences) { _preferences.value = prefs }
+
+    fun setCategoriesSeeded(seeded: Boolean) { _categoriesSeeded.value = seeded }
+    fun categoriesSeededValue(): Boolean = _categoriesSeeded.value
+
+    override suspend fun markCategoriesSeeded() { _categoriesSeeded.value = true }
 
     override suspend fun updateDarkTheme(isDark: Boolean) {
         _preferences.value = _preferences.value.copy(isDarkTheme = isDark)
