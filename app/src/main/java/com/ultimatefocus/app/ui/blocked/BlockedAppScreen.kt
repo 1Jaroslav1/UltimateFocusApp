@@ -9,8 +9,15 @@
  *
  * Split into a stateful entry point (`BlockedAppScreen`) and a stateless
  * content composable (`BlockedAppContent`) so Compose tests can render the
- * UI without a Hilt-injected ViewModel.
- * Covers: ULT-21, ULT-24
+ * UI without booting the activity.
+ *
+ * ULT-84: takes BlockedAppExtras as a parameter (rather than reading them
+ * once from a SavedStateHandle in a ViewModel) so a re-entry into the
+ * singleTask BlockedAppActivity refreshes the screen against the new
+ * app. The countdown is keyed on extras.blockedUntilEpochMs so a fresh
+ * tick stream begins on every re-entry.
+ *
+ * Covers: ULT-21, ULT-24, ULT-84
  */
 package com.ultimatefocus.app.ui.blocked
 
@@ -32,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,26 +48,32 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ultimatefocus.app.domain.service.Clock
 import com.ultimatefocus.app.util.BlockedTimeFormatter
 
 @Composable
 fun BlockedAppScreen(
+    extras: BlockedAppExtras,
+    clock: Clock,
     onDismiss: () -> Unit,
-    viewModel: BlockedAppViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val countdown by rememberBlockedCountdown(extras.blockedUntilEpochMs, clock)
 
-    LaunchedEffect(uiState.shouldFinish) {
-        if (uiState.shouldFinish) onDismiss()
+    LaunchedEffect(countdown.shouldFinish) {
+        if (countdown.shouldFinish) onDismiss()
+    }
+
+    val unblockLabel = remember(extras.blockedUntilEpochMs) {
+        if (extras.blockedUntilEpochMs > 0L) {
+            BlockedTimeFormatter.formatUnblockDateTime(extras.blockedUntilEpochMs)
+        } else ""
     }
 
     BlockedAppContent(
-        appLabel = uiState.appLabel,
-        remainingLabel = BlockedTimeFormatter.formatRemaining(uiState.remainingMs),
-        unblockDateTimeLabel = uiState.unblockDateTimeLabel,
-        scheduleName = uiState.scheduleName,
+        appLabel = extras.appLabel,
+        remainingLabel = BlockedTimeFormatter.formatRemaining(countdown.remainingMs),
+        unblockDateTimeLabel = unblockLabel,
+        scheduleName = extras.scheduleName,
         onDismiss = onDismiss,
     )
 }
@@ -87,7 +101,7 @@ fun BlockedAppContent(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = "\uD83D\uDD12 $appLabel",
+                text = "🔒 $appLabel",
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,

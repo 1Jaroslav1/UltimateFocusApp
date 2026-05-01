@@ -11,7 +11,13 @@
  * exactly one of those is non-empty.
  *
  * excludeFromRecents + singleTask ensure the reminder is not stackable.
- * Covers: ULT-21, ULT-24
+ *
+ * ULT-84: extras are hoisted into Compose mutableState and refreshed in
+ * onNewIntent so re-entries with a different blocked app render the new
+ * label + countdown instead of stale data from the first entry. Clock is
+ * injected via Hilt and provided to the Compose tree as a parameter.
+ *
+ * Covers: ULT-21, ULT-24, ULT-84
  */
 package com.ultimatefocus.app.ui.blocked
 
@@ -21,14 +27,28 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import com.ultimatefocus.app.domain.service.Clock
 import com.ultimatefocus.app.ui.theme.UltimateFocusTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class BlockedAppActivity : ComponentActivity() {
 
+    @Inject
+    lateinit var clock: Clock
+
+    private val extrasState: MutableStateFlow<BlockedAppExtras> =
+        MutableStateFlow(BlockedAppExtras())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        extrasState.value = intent.readBlockedAppExtras()
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
@@ -36,10 +56,28 @@ class BlockedAppActivity : ComponentActivity() {
             },
         )
         setContent {
+            val extras by extrasState.asStateFlow().collectAsState()
             UltimateFocusTheme {
-                BlockedAppScreen(onDismiss = ::finishToHome)
+                BlockedAppScreen(
+                    extras = extras,
+                    clock = clock,
+                    onDismiss = ::finishToHome,
+                )
             }
         }
+    }
+
+    /**
+     * singleTask + FLAG_ACTIVITY_CLEAR_TOP makes Android reuse this
+     * existing instance and deliver new launches via onNewIntent. Update
+     * the activity's intent and the Compose extras so the screen
+     * re-renders against the new app — without this override, ULT-84's
+     * "wrong app shown" bug would re-appear.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        extrasState.value = intent.readBlockedAppExtras()
     }
 
     private fun finishToHome() {
