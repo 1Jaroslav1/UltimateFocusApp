@@ -47,7 +47,7 @@ fun ClockWidget(
         contentAlignment = Alignment.Center,
         modifier = modifier.testTag("clock_widget"),
     ) {
-        Canvas(modifier = Modifier.size(160.dp).testTag("clock_battery_arc")) {
+        Canvas(modifier = Modifier.size(180.dp).testTag("clock_battery_arc")) {
             val strokeWidth = 3.dp.toPx()
             val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
             val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
