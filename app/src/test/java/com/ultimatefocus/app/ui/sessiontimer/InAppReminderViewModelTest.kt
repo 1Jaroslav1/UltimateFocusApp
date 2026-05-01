@@ -7,7 +7,11 @@
  * + FakeSessionTimerAppDao + FakeClock so the ViewModel ↔ Repository ↔
  * persistence seam is integration-tested end-to-end inside one JVM test.
  *
- * Covers: ULT-76, ULT-77
+ * ULT-82 #4 added the FakeAppUsageStatsRepository wire-up so the picker
+ * sort can be exercised: rows are ordered by weekly-usage descending then
+ * alphabetical, and missing-permission collapses cleanly to alphabetical.
+ *
+ * Covers: ULT-76, ULT-77, ULT-82
  */
 package com.ultimatefocus.app.ui.sessiontimer
 
@@ -18,6 +22,7 @@ import com.ultimatefocus.app.data.repository.FakeAppRepository
 import com.ultimatefocus.app.data.repository.SessionTimerRepositoryImpl
 import com.ultimatefocus.app.domain.model.AppInfo
 import com.ultimatefocus.app.domain.model.SessionExpiryMode
+import com.ultimatefocus.app.domain.repository.FakeAppUsageStatsRepository
 import com.ultimatefocus.app.domain.repository.FakeUserPreferencesSource
 import com.ultimatefocus.app.domain.service.FakeClock
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +45,13 @@ class InAppReminderViewModelTest {
     private lateinit var fakePrefs: FakeUserPreferencesSource
     private lateinit var fakeDao: FakeSessionTimerAppDao
     private lateinit var fakeApps: FakeAppRepository
+    private lateinit var fakeUsage: FakeAppUsageStatsRepository
     private lateinit var viewModel: InAppReminderViewModel
+
+    private fun newViewModel(usage: FakeAppUsageStatsRepository) {
+        val repo = SessionTimerRepositoryImpl(fakePrefs, fakeDao, FakeClock(current = 1L))
+        viewModel = InAppReminderViewModel(repo, fakeApps, usage)
+    }
 
     @Before
     fun setUp() {
@@ -48,8 +59,8 @@ class InAppReminderViewModelTest {
         fakePrefs = FakeUserPreferencesSource()
         fakeDao = FakeSessionTimerAppDao()
         fakeApps = FakeAppRepository()
-        val repo = SessionTimerRepositoryImpl(fakePrefs, fakeDao, FakeClock(current = 1L))
-        viewModel = InAppReminderViewModel(repo, fakeApps)
+        fakeUsage = FakeAppUsageStatsRepository()
+        newViewModel(fakeUsage)
     }
 
     @After
@@ -110,7 +121,8 @@ class InAppReminderViewModelTest {
     // ── Per-app list ─────────────────────────────────────────────────────────
 
     @Test
-    fun `uiState surfaces installed apps sorted by label`() = runTest {
+    fun `uiState surfaces installed apps sorted alphabetically when no usage data`() = runTest {
+        // No usage data → ties on 0L collapse to label-asc order.
         fakeApps.setApps(
             listOf(
                 appInfo("com.zeta", "Zeta App"),
@@ -119,13 +131,90 @@ class InAppReminderViewModelTest {
             ),
         )
         viewModel.uiState.test {
-            // initial empty before combine completes; pull until apps appear
             var snap = awaitItem()
             while (snap.totalAppCount == 0) snap = awaitItem()
             assertEquals(
                 listOf("com.alpha", "com.middle", "com.zeta"),
                 snap.visibleApps.map { it.packageName },
             )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // ── ULT-82 #4: usage-driven sort ─────────────────────────────────────────
+
+    @Test
+    fun `uiState sorts by weekly usage descending then label ascending`() = runTest {
+        fakeUsage = FakeAppUsageStatsRepository(
+            seed = mapOf(
+                "com.alpha" to 1_000L,
+                "com.zeta" to 60 * 60 * 1000L, // 1h, biggest
+                "com.middle" to 5 * 60 * 1000L, // 5m
+            ),
+        )
+        newViewModel(fakeUsage)
+        fakeApps.setApps(
+            listOf(
+                appInfo("com.zeta", "Zeta App"),
+                appInfo("com.alpha", "Alpha App"),
+                appInfo("com.middle", "Middle App"),
+            ),
+        )
+        viewModel.uiState.test {
+            var snap = awaitItem()
+            while (snap.totalAppCount == 0) snap = awaitItem()
+            assertEquals(
+                listOf("com.zeta", "com.middle", "com.alpha"),
+                snap.visibleApps.map { it.packageName },
+            )
+            // Sanity check: usage millis carried through.
+            assertEquals(60L * 60 * 1000L, snap.visibleApps[0].weeklyUsageMillis)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `uiState ties on usage break alphabetically`() = runTest {
+        fakeUsage = FakeAppUsageStatsRepository(
+            seed = mapOf("com.alpha" to 1_000L, "com.bravo" to 1_000L),
+        )
+        newViewModel(fakeUsage)
+        fakeApps.setApps(
+            listOf(
+                appInfo("com.bravo", "Bravo App"),
+                appInfo("com.alpha", "Alpha App"),
+            ),
+        )
+        viewModel.uiState.test {
+            var snap = awaitItem()
+            while (snap.totalAppCount == 0) snap = awaitItem()
+            assertEquals(
+                listOf("com.alpha", "com.bravo"),
+                snap.visibleApps.map { it.packageName },
+            )
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `uiState falls back to alphabetical when usage permission missing`() = runTest {
+        fakeUsage = FakeAppUsageStatsRepository(available = false)
+        newViewModel(fakeUsage)
+        fakeApps.setApps(
+            listOf(
+                appInfo("com.zeta", "Zeta App"),
+                appInfo("com.alpha", "Alpha App"),
+            ),
+        )
+        viewModel.uiState.test {
+            var snap = awaitItem()
+            while (snap.totalAppCount == 0) snap = awaitItem()
+            assertEquals(
+                listOf("com.alpha", "com.zeta"),
+                snap.visibleApps.map { it.packageName },
+            )
+            // All weekly usage is 0 when permission is missing.
+            assertTrue(snap.visibleApps.all { it.weeklyUsageMillis == 0L })
             cancelAndIgnoreRemainingEvents()
         }
     }
