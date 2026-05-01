@@ -58,8 +58,7 @@ import com.ultimatefocus.app.domain.service.SyncSelection
 import com.ultimatefocus.app.ui.components.DefaultAppModal
 import com.ultimatefocus.app.ui.components.DefaultModalAction
 
-private const val DIALOG_MAX_HEIGHT_DP = 560
-private const val LIST_MAX_HEIGHT_DP = 380
+private const val DIALOG_MAX_HEIGHT_DP = 600
 
 @Composable
 fun SyncCategoriesDialog(
@@ -84,11 +83,17 @@ fun SyncCategoriesDialog(
     DefaultAppModal(
         header = "Sync with system categories",
         onDismiss = onDismiss,
-        modifier = Modifier
-            .heightIn(max = DIALOG_MAX_HEIGHT_DP.dp)
-            .testTag("sync_categories_dialog"),
+        modifier = Modifier.testTag("sync_categories_dialog"),
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        // Bound the dialog height inside the modal so weight(1f) on the
+        // LazyColumn has something to size against. Without this bound
+        // the column took its intrinsic height and overflowed the screen,
+        // pushing the Cancel/Sync footer below the visible area.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = DIALOG_MAX_HEIGHT_DP.dp),
+        ) {
             Text(
                 text = "Pick the categories and apps to sync. Default selections " +
                     "match Android's system categories plus a small list of " +
@@ -103,10 +108,14 @@ fun SyncCategoriesDialog(
 
             HorizontalDivider(color = Color.White.copy(alpha = 0.4f), thickness = 1.dp)
 
+            // weight(1f) so the list takes whatever space remains after
+            // the intro + footer are measured. fill = true so it
+            // definitively occupies that share — the footer is then
+            // always visible at the bottom regardless of list length.
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = LIST_MAX_HEIGHT_DP.dp)
+                    .weight(1f)
                     .testTag("sync_dialog_list"),
             ) {
                 items(items = candidates, key = { it.name }) { candidate ->
@@ -155,7 +164,13 @@ fun SyncCategoriesDialog(
 
             HorizontalDivider(color = Color.White, thickness = 1.dp)
 
-            Row(modifier = Modifier.fillMaxWidth()) {
+            // Sticky footer: Cancel + Sync. Pinned outside the LazyColumn
+            // so it stays visible as the list scrolls.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("sync_dialog_footer"),
+            ) {
                 DefaultModalAction(
                     text = "Cancel",
                     onClick = onDismiss,

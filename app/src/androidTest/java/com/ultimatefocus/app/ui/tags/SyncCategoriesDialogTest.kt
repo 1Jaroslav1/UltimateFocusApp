@@ -56,6 +56,43 @@ class SyncCategoriesDialogTest {
     )
 
     @Test
+    fun footerWithCancelAndSyncIsAlwaysVisible() {
+        // Stress the dialog with a tall candidate list to verify the
+        // footer Row stays visible (the LazyColumn must scroll
+        // internally rather than push the footer off-screen).
+        val tall = listOf(
+            SyncCategoryCandidate(
+                name = "Social Media",
+                color = TagColor.STEEL_BLUE,
+                packages = (1..30).map {
+                    SyncAppCandidate("com.social.app$it", "Social App $it")
+                },
+                alreadyExists = false,
+            ),
+            SyncCategoryCandidate(
+                name = "Games",
+                color = TagColor.AMBER_GOLD,
+                packages = (1..30).map {
+                    SyncAppCandidate("com.game.app$it", "Game $it")
+                },
+                alreadyExists = false,
+            ),
+        )
+        composeRule.setContent {
+            UltimateFocusTheme {
+                SyncCategoriesDialog(
+                    candidates = tall,
+                    onConfirm = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("sync_dialog_footer").assertIsDisplayed()
+        composeRule.onNodeWithTag("sync_dialog_cancel").assertIsDisplayed()
+        composeRule.onNodeWithTag("sync_dialog_confirm").assertIsDisplayed()
+    }
+
+    @Test
     fun defaultsAllCategoriesAndAppsChecked() {
         composeRule.setContent {
             UltimateFocusTheme {
