@@ -34,9 +34,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.ultimatefocus.app.ui.components.MinimalToggle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,7 +93,7 @@ fun SettingsScreen(
         SettingsRow(
             title = "Dark Theme",
             trailing = {
-                Switch(
+                MinimalToggle(
                     checked = preferences.isDarkTheme,
                     onCheckedChange = { viewModel.toggleDarkTheme() },
                     modifier = Modifier.testTag("dark_theme_switch"),
@@ -110,7 +110,7 @@ fun SettingsScreen(
             subtitle = "Keyboard appears automatically when you open the app list, " +
                 "encouraging you to search intentionally rather than browse casually.",
             trailing = {
-                Switch(
+                MinimalToggle(
                     checked = preferences.autoKeyboard,
                     onCheckedChange = { viewModel.toggleAutoKeyboard() },
                     modifier = Modifier.testTag("auto_keyboard_switch"),
@@ -128,7 +128,7 @@ fun SettingsScreen(
                 "two fingers to lock the device. Requires device-admin " +
                 "permission on first enable.",
             trailing = {
-                Switch(
+                MinimalToggle(
                     checked = preferences.twoFingerDoubleTapToLockEnabled,
                     onCheckedChange = { viewModel.setTwoFingerDoubleTapToLock(it) },
                     modifier = Modifier.testTag("two_finger_double_tap_to_lock_switch"),
