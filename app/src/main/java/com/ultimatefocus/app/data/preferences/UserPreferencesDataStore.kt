@@ -8,7 +8,12 @@
  * The In-App Reminder global flags (master / precision mode / mindful launch
  * delay / expiry mode) live here too so the settings page binds against a
  * single Flow<UserPreferences> projection.
- * Covers: ULT-6, ULT-8, ULT-13, ULT-14, ULT-16, ULT-18, ULT-76
+ *
+ * ULT-85: also tracks the `categories_seeded` boolean so the
+ * CategorySeeder runs at most once per install — stored as a separate
+ * key (not in UserPreferences) because it is internal bookkeeping.
+ *
+ * Covers: ULT-6, ULT-8, ULT-13, ULT-14, ULT-16, ULT-18, ULT-76, ULT-85
  */
 package com.ultimatefocus.app.data.preferences
 
@@ -55,6 +60,15 @@ class UserPreferencesDataStore @Inject constructor(
         val IN_APP_REMINDER_MINDFUL_LAUNCH_DELAY =
             booleanPreferencesKey("in_app_reminder_mindful_launch_delay")
         val IN_APP_REMINDER_EXPIRY_MODE = stringPreferencesKey("in_app_reminder_expiry_mode")
+        val ONBOARDING_CATEGORIES_SEEDED = booleanPreferencesKey("onboarding_categories_seeded")
+    }
+
+    override val categoriesSeeded: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ONBOARDING_CATEGORIES_SEEDED] ?: false
+    }
+
+    override suspend fun markCategoriesSeeded() {
+        context.dataStore.edit { it[Keys.ONBOARDING_CATEGORIES_SEEDED] = true }
     }
 
     override val preferences: Flow<UserPreferences> = context.dataStore.data.map { prefs ->

@@ -3,12 +3,15 @@
  * plain text labels (no icons). Accessible via swipe-left from the home
  * screen; dismissible by swiping right or pressing back (ULT-7).
  * When the auto-keyboard setting is enabled the search field gains focus
- * automatically on entry, prompting intentional typing (ULT-8).
+ * automatically on entry, prompting intentional typing (ULT-8). When the
+ * drawer is no longer the active pager page (e.g. user swiped back to
+ * home) the IME is hidden and focus is cleared so the keyboard does not
+ * linger over a screen with no input field (ULT-83 #1).
  * Long-pressing a row routes through the block-aware context menu +
  * duration picker (ULT-20). The context menu also offers "Manage tags…"
  * to assign/unassign tags via TagPickerDialog (ULT-73). Long-press while
  * no menu/dialog is open enters multi-select mode for bulk tagging.
- * Covers: ULT-7, ULT-8, ULT-20, ULT-73
+ * Covers: ULT-7, ULT-8, ULT-20, ULT-73, ULT-83
  */
 package com.ultimatefocus.app.ui.drawer
 
@@ -42,6 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -85,6 +90,8 @@ fun AppDrawerScreen(
     var tagPickerPackages by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val launchContext = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -118,6 +125,19 @@ fun AppDrawerScreen(
     LaunchedEffect(autoKeyboard, isActive) {
         if (autoKeyboard && isActive && !selectionState.active) {
             runCatching { focusRequester.requestFocus() }
+        }
+    }
+
+    // ULT-83 #1: When the drawer page is no longer active in the
+    // HorizontalPager (the user swiped back to home), hide the IME and
+    // clear focus so the keyboard does not linger over a screen with no
+    // visible input field. force = true is needed because clearFocus
+    // no-ops while focus is mid-processing — for instance right after the
+    // auto-keyboard requestFocus above.
+    LaunchedEffect(isActive) {
+        if (!isActive) {
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
         }
     }
 

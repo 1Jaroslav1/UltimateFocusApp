@@ -1,6 +1,7 @@
 /**
  * Manage Tags screen — full-screen list of user-defined tags with a "Create
- * tag" CTA at the top. Tapping a tag row opens TagEditorDialog in edit mode.
+ * tag" CTA at the top and a "Sync with system categories" CTA beneath it
+ * (ULT-85 follow-up). Tapping a tag row opens TagEditorDialog in edit mode.
  * Long-pressing a row opens an action menu offering Edit, Delete, and
  * Block-by-Tag (ULT-75). When a tag has an active block, its row shows a
  * lock badge with the remaining duration; the long-press menu hides both
@@ -10,7 +11,8 @@
  * explaining the limit. Empty state encourages first-tag creation.
  * All dialogs render in the launcher's default app modal style for
  * visual consistency with the long-press app menu.
- * Covers: ULT-72, ULT-75
+ *
+ * Covers: ULT-72, ULT-75, ULT-85
  */
 package com.ultimatefocus.app.ui.tags
 
@@ -61,6 +63,7 @@ import com.ultimatefocus.app.domain.model.BlockDuration
 import com.ultimatefocus.app.domain.model.MAX_TAGS
 import com.ultimatefocus.app.domain.model.Tag
 import com.ultimatefocus.app.domain.repository.TagOperationError
+import com.ultimatefocus.app.domain.service.SyncCategoryCandidate
 import com.ultimatefocus.app.ui.components.DefaultAppModal
 import com.ultimatefocus.app.ui.components.DefaultModalAction
 import com.ultimatefocus.app.ui.components.DefaultModalStatusRow
@@ -116,6 +119,21 @@ fun ManageTagsScreen(
         CreateTagRow(
             isAtLimit = state.isAtTagLimit,
             onClick = { dialogState = TagDialogState.Editor(existing = null) },
+        )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
+
+        SyncCategoriesRow(
+            onClick = {
+                scope.launch {
+                    val candidates = viewModel.loadSyncCandidates()
+                    dialogState = if (candidates.any { it.packages.isNotEmpty() }) {
+                        TagDialogState.SyncCategories(candidates)
+                    } else {
+                        TagDialogState.SyncCategoriesEmpty
+                    }
+                }
+            },
         )
 
         HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
@@ -200,6 +218,21 @@ fun ManageTagsScreen(
                 onDismiss = { dialogState = TagDialogState.Hidden },
             )
         }
+        is TagDialogState.SyncCategories -> {
+            SyncCategoriesDialog(
+                candidates = s.candidates,
+                onConfirm = { selection ->
+                    viewModel.applySyncSelection(s.candidates, selection)
+                    dialogState = TagDialogState.Hidden
+                },
+                onDismiss = { dialogState = TagDialogState.Hidden },
+            )
+        }
+        TagDialogState.SyncCategoriesEmpty -> {
+            SyncCategoriesEmptyDialog(
+                onDismiss = { dialogState = TagDialogState.Hidden },
+            )
+        }
     }
 
     errorMessage?.let { msg ->
@@ -223,6 +256,31 @@ fun ManageTagsScreen(
                 modifier = Modifier.testTag("tag_error_dismiss_button"),
             )
         }
+    }
+}
+
+@Composable
+private fun SyncCategoriesRow(onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .testTag("sync_categories_button"),
+    ) {
+        Text(
+            text = "↻ Sync with system categories",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.Medium,
+        )
+        Text(
+            text = "Create Social Media, Games, Video & Streaming, Music & Audio, " +
+                "and News tags from the apps installed on this device.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 
@@ -329,6 +387,8 @@ private sealed class TagDialogState {
     data class RowMenu(val tag: Tag) : TagDialogState()
     data class DeleteConfirm(val tag: Tag, val affectedAppCount: Int) : TagDialogState()
     data class BlockPreview(val tag: Tag, val affectedApps: List<BlockTagPreviewApp>) : TagDialogState()
+    data class SyncCategories(val candidates: List<SyncCategoryCandidate>) : TagDialogState()
+    data object SyncCategoriesEmpty : TagDialogState()
 }
 
 private fun TagOperationError.toUiMessage(): String = when (this) {

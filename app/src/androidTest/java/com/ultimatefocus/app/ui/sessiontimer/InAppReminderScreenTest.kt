@@ -1,16 +1,17 @@
 /**
  * Compose UI tests for InAppReminderContent. Drives the stateless variant
  * directly so the test does not need Hilt or a real DataStore. Verifies the
- * acceptance criteria from ULT-76 + ULT-77:
+ * acceptance criteria from ULT-76 + ULT-77 plus the ULT-82 #4 additions:
  *  - master switch toggles emit through the supplied callback
  *  - precision row tap propagates only when master is ON
  *  - mindful-launch-delay switch is disabled when master is OFF
  *  - radio group reflects the supplied selection and emits new selections
  *  - per-app rows render label + Switch and emit toggle callback
+ *  - per-app rows render the trailing weekly-usage label (ULT-82 #4)
  *  - per-app Switches are disabled when master is OFF
  *  - search filter empty state shows the documented copy
  *
- * Covers: ULT-76, ULT-77
+ * Covers: ULT-76, ULT-77, ULT-82
  */
 package com.ultimatefocus.app.ui.sessiontimer
 
@@ -215,6 +216,25 @@ class InAppReminderScreenTest {
             ),
         )
         composeRule.onNodeWithTag("in_app_reminder_apps_empty").assertIsDisplayed()
+    }
+
+    @Test
+    fun appRow_rendersWeeklyUsageLabel() {
+        render(
+            state = InAppReminderUiState(
+                settings = InAppReminderSettings(masterEnabled = true),
+                visibleApps = listOf(
+                    AppToggleRow(
+                        packageName = "com.alpha",
+                        label = "Alpha",
+                        enabled = false,
+                        weeklyUsageMillis = 60L * 60 * 1000L,
+                    ),
+                ),
+                totalAppCount = 1,
+            ),
+        )
+        composeRule.onNodeWithTag("in_app_reminder_app_usage_com.alpha").assertIsDisplayed()
     }
 
     @Test

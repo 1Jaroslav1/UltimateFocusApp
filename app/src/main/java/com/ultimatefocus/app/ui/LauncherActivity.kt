@@ -3,7 +3,8 @@
  * Declared as the HOME intent handler in AndroidManifest so the system
  * presents it as the device home screen.
  * On first launch, prompts the user to set this app as the default launcher
- * via RoleManager (API 29+).
+ * via RoleManager (API 29+) and asks CategorySeeder (ULT-85) to create
+ * the default "Social Media" and "Games" tags + assign matching apps.
  *
  * Back-press handling is left to OnBackPressedDispatcher (NavHost registers
  * its own pop callback there, so the OS edge-swipe-back gesture pops the
@@ -13,7 +14,7 @@
  * which would short-circuit the dispatcher and break navigation pop on the
  * pushed Settings / Blocking schedules / editor screens.
  *
- * Covers: ULT-5, ULT-23 (back-press iteration)
+ * Covers: ULT-5, ULT-23, ULT-85
  */
 package com.ultimatefocus.app.ui
 
@@ -27,14 +28,21 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
+import com.ultimatefocus.app.domain.service.CategorySeeder
 import com.ultimatefocus.app.ui.navigation.NavGraph
 import com.ultimatefocus.app.ui.settings.SettingsViewModel
 import com.ultimatefocus.app.ui.theme.UltimateFocusTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class LauncherActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var categorySeeder: CategorySeeder
 
     private var hasRequestedLauncherRole = false
 
@@ -45,6 +53,10 @@ class LauncherActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // ULT-85: best-effort one-shot seeding on first launch. The
+        // seeder is internally idempotent (guarded by a DataStore flag),
+        // so safely no-ops on every subsequent cold start.
+        lifecycleScope.launch { categorySeeder.seedIfNeeded() }
         setContent {
             val settingsViewModel: SettingsViewModel = hiltViewModel()
             val preferences by settingsViewModel.preferences.collectAsStateWithLifecycle()

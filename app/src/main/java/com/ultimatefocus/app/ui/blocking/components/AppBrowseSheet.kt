@@ -7,7 +7,12 @@
  * Each row is an AppPickerRow so selection state, label, and weekly usage
  * are rendered identically to the inline top-15 in the editor.
  *
- * Covers: ULT-24 (iteration)
+ * The filter field is the shared AppFilterField (which now delegates to
+ * the centralized MinimalTextField, ULT-82 #1) so this sheet, the drawer
+ * search and the In-App Reminder filter all share one bottom-only-underline
+ * visual.
+ *
+ * Covers: ULT-24, ULT-82
  */
 package com.ultimatefocus.app.ui.blocking.components
 

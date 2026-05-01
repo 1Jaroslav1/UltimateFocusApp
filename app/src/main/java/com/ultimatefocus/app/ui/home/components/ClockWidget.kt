@@ -1,7 +1,12 @@
 /**
  * Composable that renders a circular battery arc around the current time and date.
  * No icons — purely text and a thin arc drawn on a Canvas.
- * Covers: ULT-6
+ *
+ * Sizes were reduced ~20% in ULT-82 #2 — explicit fontSize values are used
+ * (rather than typography tokens) so the reduction is exact: time 45 sp,
+ * date 11 sp, battery 9 sp, Canvas 160 dp.
+ *
+ * Covers: ULT-6, ULT-82
  */
 package com.ultimatefocus.app.ui.home.components
 
@@ -19,8 +24,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -36,8 +43,11 @@ fun ClockWidget(
     val primaryColor = MaterialTheme.colorScheme.onBackground
     val dimColor = MaterialTheme.colorScheme.onSurfaceVariant
 
-    Box(contentAlignment = Alignment.Center, modifier = modifier) {
-        Canvas(modifier = Modifier.size(200.dp)) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier.testTag("clock_widget"),
+    ) {
+        Canvas(modifier = Modifier.size(180.dp).testTag("clock_battery_arc")) {
             val strokeWidth = 3.dp.toPx()
             val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
             val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
@@ -67,21 +77,22 @@ fun ClockWidget(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = currentTime.format(timeFormatter),
-                style = MaterialTheme.typography.displayLarge,
+                fontSize = 45.sp,
                 color = primaryColor,
                 fontWeight = FontWeight.Light,
+                modifier = Modifier.testTag("clock_time"),
             )
             Text(
                 text = currentTime.format(dateFormatter),
-                style = MaterialTheme.typography.bodyMedium,
+                fontSize = 11.sp,
                 color = dimColor,
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 4.dp).testTag("clock_date"),
             )
             Text(
                 text = if (isCharging) "$batteryLevel% +" else "$batteryLevel%",
-                style = MaterialTheme.typography.labelMedium,
+                fontSize = 9.sp,
                 color = dimColor,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 2.dp).testTag("clock_battery"),
             )
         }
     }

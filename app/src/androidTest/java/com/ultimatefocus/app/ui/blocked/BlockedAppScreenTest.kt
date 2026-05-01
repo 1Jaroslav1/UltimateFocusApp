@@ -3,10 +3,19 @@
  * Verifies required UI elements render correctly and — crucially — that
  * NO "Unblock" / "Override" / "Skip" / "Cancel block" affordance appears.
  * This enforces the ULT-21 AC that blocks have no escape hatch.
- * Covers: ULT-21
+ *
+ * ULT-84: also exercises the re-entry case — when the activity is
+ * reused via onNewIntent for a different blocked app, the screen must
+ * re-render against the new extras (label switches, countdown re-binds
+ * to the new expiry).
+ *
+ * Covers: ULT-21, ULT-84
  */
 package com.ultimatefocus.app.ui.blocked
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -14,6 +23,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.ultimatefocus.app.domain.service.Clock
 import com.ultimatefocus.app.ui.theme.UltimateFocusTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -124,6 +134,47 @@ class BlockedAppScreenTest {
         }
         // No crash and the node is not rendered.
         composeRule.onNodeWithTag("blocked_return_home").assertIsDisplayed()
+    }
+
+    // ── ULT-84: re-entry refreshes the screen ───────────────────────────────
+
+    @Test
+    fun extrasSwapMidStream_relabelsScreenAndResetsCountdown() {
+        // Two distinct blocked apps with different countdowns. Simulates
+        // the singleTask onNewIntent path: same Compose tree, new extras.
+        val app1 = BlockedAppExtras(
+            packageName = "com.test.app1",
+            appLabel = "App One",
+            blockedUntilEpochMs = 1_000L + 60_000L,
+            durationLabel = "1h",
+        )
+        val app2 = BlockedAppExtras(
+            packageName = "com.test.app2",
+            appLabel = "App Two",
+            blockedUntilEpochMs = 1_000L + 5 * 60_000L,
+            durationLabel = "5h",
+        )
+        // Inline test Clock — FakeClock lives in the JVM unit test source
+        // set and isn't visible from androidTest.
+        val clock = object : Clock { override fun now(): Long = 1_000L }
+        var extras by mutableStateOf(app1)
+
+        composeRule.setContent {
+            UltimateFocusTheme {
+                BlockedAppScreen(extras = extras, clock = clock, onDismiss = {})
+            }
+        }
+
+        composeRule.onNodeWithText("🔒 App One").assertIsDisplayed()
+
+        extras = app2
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("🔒 App Two").assertIsDisplayed()
+        // The previous label is gone — confirms recomposition really reset.
+        assertTrue(
+            composeRule.onAllNodesWithText("🔒 App One").fetchSemanticsNodes().isEmpty(),
+        )
     }
 
     @Test

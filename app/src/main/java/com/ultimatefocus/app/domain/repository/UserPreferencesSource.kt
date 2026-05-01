@@ -16,6 +16,15 @@ import kotlinx.coroutines.flow.Flow
 
 interface UserPreferencesSource {
     val preferences: Flow<UserPreferences>
+
+    /**
+     * Onboarding flag: true once CategorySeeder has run successfully (or
+     * deliberately skipped, e.g. user-already-has-N-tags). Stored
+     * separately from [preferences] because it is internal bookkeeping,
+     * not a user-facing setting. (ULT-85)
+     */
+    val categoriesSeeded: Flow<Boolean>
+
     suspend fun updateDarkTheme(isDark: Boolean)
     suspend fun updateFontSize(fontSize: FontSize)
     suspend fun updateHomeAlignment(alignment: HomeAlignment)
@@ -27,4 +36,7 @@ interface UserPreferencesSource {
     suspend fun updateInAppReminderPrecisionMode(enabled: Boolean)
     suspend fun updateInAppReminderMindfulLaunchDelay(enabled: Boolean)
     suspend fun updateInAppReminderExpiryMode(mode: SessionExpiryMode)
+
+    /** Marks the auto-categories onboarding as completed. (ULT-85) */
+    suspend fun markCategoriesSeeded()
 }

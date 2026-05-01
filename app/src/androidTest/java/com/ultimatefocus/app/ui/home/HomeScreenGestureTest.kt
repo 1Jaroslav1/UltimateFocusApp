@@ -2,12 +2,15 @@
  * Compose UI integration tests for the home-screen gesture modifiers.
  * Verifies swipe-up, swipe-down and two-finger-double-tap dispatch, and
  * that below-threshold, horizontal or disabled-feature interactions are
- * ignored.
+ * ignored. ULT-82 #3 added a regression test for swipes that begin on a
+ * scrolling child (FavoritesList): the swipe must still reach the home
+ * gesture even though the child consumes vertical drags on the Main pass.
  *
- * Covers: ULT-16, ULT-17, ULT-18
+ * Covers: ULT-16, ULT-17, ULT-18, ULT-82
  */
 package com.ultimatefocus.app.ui.home
 
+import android.content.ComponentName
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
@@ -20,6 +23,9 @@ import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.ultimatefocus.app.domain.model.AppInfo
+import com.ultimatefocus.app.domain.model.HomeAlignment
+import com.ultimatefocus.app.ui.home.components.FavoritesList
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
 import com.ultimatefocus.app.ui.home.components.homeTwoFingerDoubleTap
 import com.ultimatefocus.app.ui.theme.UltimateFocusTheme
@@ -206,6 +212,48 @@ class HomeScreenGestureTest {
 
         composeRule.runOnIdle {
             assertEquals(0, counts.twoFingerDoubleTap)
+        }
+    }
+
+    // ── ULT-82 #3: swipe-up over FavoritesList (full-screen swipe) ──────────
+
+    @Test
+    fun swipeUp_startingInsideFavoritesList_stillDispatches() {
+        val counts = Counts()
+        val favorites = (1..15).map {
+            AppInfo(
+                packageName = "com.test.app$it",
+                label = "App$it",
+                componentName = ComponentName("com.test.app$it", "MainActivity"),
+                isFavorite = true,
+            )
+        }
+        composeRule.setContent {
+            UltimateFocusTheme {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .homeSwipeGestures(
+                            onSwipeUp = { counts.up++ },
+                            onSwipeDown = { counts.down++ },
+                        )
+                        .testTag("home_root"),
+                ) {
+                    FavoritesList(
+                        favorites = favorites,
+                        alignment = HomeAlignment.LEFT,
+                        onAppClick = {},
+                        onAppLongClick = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("favorites_list").performTouchInput { swipeUp() }
+
+        composeRule.runOnIdle {
+            assertEquals(1, counts.up)
+            assertEquals(0, counts.down)
         }
     }
 

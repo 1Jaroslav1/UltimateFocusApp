@@ -13,7 +13,14 @@
  * tags…" tap to the TagPickerDialog scoped to that single app (ULT-73).
  * A tiny build-hash label in the bottom-right corner identifies the
  * currently installed build during on-device iteration.
- * Covers: ULT-6, ULT-7, ULT-13, ULT-16, ULT-17, ULT-18, ULT-20, ULT-73
+ *
+ * ULT-83 #2: hides the IME and clears focus on every ON_RESUME so the
+ * keyboard does not linger after returning from a launched app.
+ * ON_RESUME on HomeScreen only fires when Home itself resumes (returning
+ * from another app), not on intra-pager swipes — so this does not race
+ * the drawer's auto-keyboard requestFocus.
+ *
+ * Covers: ULT-6, ULT-7, ULT-13, ULT-16, ULT-17, ULT-18, ULT-20, ULT-73, ULT-83
  */
 package com.ultimatefocus.app.ui.home
 
@@ -39,10 +46,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import android.provider.Settings
@@ -78,6 +89,13 @@ fun HomeScreen(
     val leftShortcut by viewModel.leftShortcut.collectAsStateWithLifecycle()
     val rightShortcut by viewModel.rightShortcut.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        keyboardController?.hide()
+        focusManager.clearFocus(force = true)
+    }
 
     var showContextMenu by remember { mutableStateOf(false) }
     var selectedApp by remember { mutableStateOf<AppInfo?>(null) }

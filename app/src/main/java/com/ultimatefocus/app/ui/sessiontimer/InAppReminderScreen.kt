@@ -53,7 +53,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
+import com.ultimatefocus.app.ui.components.MinimalToggle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -107,10 +107,12 @@ fun InAppReminderContent(
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .testTag("in_app_reminder_screen"),
     ) {
-        // The apps section (search + list) takes a fixed 40% of the available
-        // screen height; the controls section takes the remaining 60% and
-        // scrolls internally if it overflows on small screens.
-        val appsSectionHeight = maxHeight * 0.4f
+        // The apps section (search + list) takes a fixed 48% of the available
+        // screen height (raised from 40% in ULT-82 #4 — feedback round 1
+        // asked for a roughly-20% taller list); the controls section takes
+        // the remaining 52% and scrolls internally if it overflows on
+        // small screens.
+        val appsSectionHeight = maxHeight * 0.48f
 
         Column(modifier = Modifier.fillMaxSize()) {
             TopBar(onNavigateBack = onNavigateBack)
@@ -126,7 +128,7 @@ fun InAppReminderContent(
                 CompactSettingsRow(
                     title = "In-app time reminder active",
                     trailing = {
-                        Switch(
+                        MinimalToggle(
                             checked = settings.masterEnabled,
                             onCheckedChange = onSetMaster,
                             modifier = Modifier.testTag("in_app_reminder_master_switch"),
@@ -147,7 +149,7 @@ fun InAppReminderContent(
                     CompactSettingsRow(
                         title = "Mindful Launch Delay",
                         trailing = {
-                            Switch(
+                            MinimalToggle(
                                 checked = settings.mindfulLaunchDelay,
                                 enabled = settings.masterEnabled,
                                 onCheckedChange = onSetMindfulLaunchDelay,
@@ -273,7 +275,16 @@ private fun AppRow(
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.weight(1f),
         )
-        Switch(
+        Text(
+            text = com.ultimatefocus.app.util.UsageDurationFormatter
+                .formatWeeklyUsage(row.weeklyUsageMillis),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .padding(horizontal = 8.dp)
+                .testTag("in_app_reminder_app_usage_${row.packageName}"),
+        )
+        MinimalToggle(
             checked = row.enabled,
             enabled = masterEnabled,
             onCheckedChange = { onToggle(row.packageName, it) },
