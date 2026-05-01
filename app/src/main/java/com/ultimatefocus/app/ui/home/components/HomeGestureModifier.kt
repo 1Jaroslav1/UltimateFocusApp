@@ -2,21 +2,25 @@
  * Gesture-detection Modifiers used by the home screen:
  * - homeSwipeGestures accumulates vertical drag and dispatches onSwipeUp /
  *   onSwipeDown once per gesture on release, when the accumulated movement
- *   crosses SWIPE_THRESHOLD_DP.
+ *   crosses SWIPE_THRESHOLD_DP. Observes events on PointerEventPass.Initial
+ *   so the gesture is detected even when the touch starts inside a child
+ *   that consumes vertical drags (such as FavoritesList's
+ *   `verticalScroll(...)` column). Once the swipe threshold has been
+ *   crossed, the drag delta is consumed so the child stops scrolling and
+ *   the home gesture claims the rest of the drag (ULT-82 #3).
  * - homeTwoFingerDoubleTap fires onTwoFingerDoubleTap when the user performs
  *   two consecutive two-finger taps within DOUBLE_TAP_GAP_MS. Each tap is a
  *   brief press with at least two simultaneous fingers, released inside the
  *   system long-press timeout and without drifting past touchSlop.
  *
- * The double-tap detector awaits on PointerEventPass.Initial so events are
- * observed before the parent HorizontalPager's Main-pass arbitration can
- * claim multi-touch for a page drag.
+ * Both detectors await on PointerEventPass.Initial so events are observed
+ * before the parent HorizontalPager's / FavoritesList's Main-pass
+ * arbitration can claim them.
  *
- * Covers: ULT-16, ULT-17, ULT-18
+ * Covers: ULT-16, ULT-17, ULT-18, ULT-82
  */
 package com.ultimatefocus.app.ui.home.components
 
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
@@ -25,6 +29,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.abs
 
 /** Minimum accumulated vertical drag (in dp) that counts as a swipe. */
 const val SWIPE_THRESHOLD_DP: Float = 60f
@@ -40,22 +45,80 @@ const val DOUBLE_TAP_GAP_MS: Long = 700L
 /**
  * Adds vertical-swipe detection to this node. The callbacks fire at most once
  * per gesture, on release, only if the accumulated drag crosses the threshold.
+ *
+ * Observes on PointerEventPass.Initial so the detector sees pointer events
+ * before child scroll containers (FavoritesList uses `verticalScroll`)
+ * consume them — a swipe-up that begins on a favorite row still triggers
+ * the home gesture. Per-event drag deltas are NOT consumed until the
+ * vertical threshold has been crossed, so short flicks still let the
+ * favorites list scroll normally; once the threshold trips, the drag is
+ * consumed and the favorites stop receiving deltas (the home gesture has
+ * claimed the rest of the drag).
  */
 fun Modifier.homeSwipeGestures(
     onSwipeUp: () -> Unit,
     onSwipeDown: () -> Unit,
 ): Modifier = this.pointerInput(Unit) {
     val thresholdPx = SWIPE_THRESHOLD_DP * density
-    var totalDy = 0f
-    detectVerticalDragGestures(
-        onDragStart = { totalDy = 0f },
-        onDragEnd = {
-            when {
-                totalDy <= -thresholdPx -> onSwipeUp()
-                totalDy >= thresholdPx -> onSwipeDown()
+    awaitPointerEventScope {
+        while (true) {
+            // Wait for the first down event (any pointer).
+            var event: PointerEvent
+            do {
+                event = awaitPointerEvent(PointerEventPass.Initial)
+            } while (event.changes.none { it.changedToDownIgnoreConsumed() })
+
+            val anchorByPointer: MutableMap<PointerId, Offset> = mutableMapOf()
+            event.changes.forEach { ch ->
+                if (ch.pressed) anchorByPointer[ch.id] = ch.position
             }
-        },
-    ) { _, dy -> totalDy += dy }
+            var lastY = event.changes.firstOrNull { it.pressed }?.position?.y ?: 0f
+            var totalDy = 0f
+            var totalAbsDx = 0f
+            var thresholdCrossed = false
+
+            // Track the gesture until all pointers are up.
+            while (true) {
+                event = awaitPointerEvent(PointerEventPass.Initial)
+                event.changes.forEach { ch ->
+                    if (ch.id !in anchorByPointer && ch.pressed) {
+                        anchorByPointer[ch.id] = ch.position
+                    }
+                }
+
+                // Use the primary tracked pointer's position to derive deltas.
+                val primary = event.changes.firstOrNull { it.id in anchorByPointer && it.pressed }
+                if (primary != null) {
+                    val dy = primary.position.y - lastY
+                    val dx = primary.position.x - (anchorByPointer[primary.id]?.x ?: primary.position.x)
+                    totalDy += dy
+                    totalAbsDx += abs(dx)
+                    lastY = primary.position.y
+
+                    if (!thresholdCrossed && abs(totalDy) >= thresholdPx &&
+                        abs(totalDy) > totalAbsDx
+                    ) {
+                        thresholdCrossed = true
+                    }
+                    if (thresholdCrossed) {
+                        // Consume the position change so child scrollables stop
+                        // moving — we've claimed this gesture as a home swipe.
+                        event.changes.forEach { it.consume() }
+                    }
+                }
+
+                if (event.changes.none { it.pressed }) {
+                    if (thresholdCrossed) {
+                        when {
+                            totalDy <= -thresholdPx -> onSwipeUp()
+                            totalDy >= thresholdPx -> onSwipeDown()
+                        }
+                    }
+                    break
+                }
+            }
+        }
+    }
 }
 
 /**
