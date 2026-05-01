@@ -23,7 +23,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.ultimatefocus.app.domain.service.FakeClock
+import com.ultimatefocus.app.domain.service.Clock
 import com.ultimatefocus.app.ui.theme.UltimateFocusTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -154,7 +154,9 @@ class BlockedAppScreenTest {
             blockedUntilEpochMs = 1_000L + 5 * 60_000L,
             durationLabel = "5h",
         )
-        val clock = FakeClock(current = 1_000L)
+        // Inline test Clock — FakeClock lives in the JVM unit test source
+        // set and isn't visible from androidTest.
+        val clock = object : Clock { override fun now(): Long = 1_000L }
         var extras by mutableStateOf(app1)
 
         composeRule.setContent {
