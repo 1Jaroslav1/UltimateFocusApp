@@ -3,7 +3,12 @@
  * the set of colors already taken (so the editor can grey them out), and
  * imperative create/edit/delete operations that surface
  * TagOperationError as one-shot UI events.
- * Covers: ULT-72
+ *
+ * ULT-85 follow-up: also exposes the "Sync with system categories" flow
+ * that wraps CategorySeeder — gather the list of detectable categories +
+ * apps so the user can opt-in via checkboxes, then apply the selection.
+ *
+ * Covers: ULT-72, ULT-85
  */
 package com.ultimatefocus.app.ui.tags
 
@@ -14,6 +19,9 @@ import com.ultimatefocus.app.domain.model.Tag
 import com.ultimatefocus.app.domain.model.TagColor
 import com.ultimatefocus.app.domain.repository.TagOperationError
 import com.ultimatefocus.app.domain.repository.TagRepository
+import com.ultimatefocus.app.domain.service.CategorySeeder
+import com.ultimatefocus.app.domain.service.SyncCategoryCandidate
+import com.ultimatefocus.app.domain.service.SyncSelection
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,6 +43,7 @@ data class ManageTagsUiState(
 @HiltViewModel
 class ManageTagsViewModel @Inject constructor(
     private val tagRepository: TagRepository,
+    private val categorySeeder: CategorySeeder,
 ) : ViewModel() {
 
     val uiState: StateFlow<ManageTagsUiState> = tagRepository.observeTags()
@@ -80,4 +89,26 @@ class ManageTagsViewModel @Inject constructor(
 
     suspend fun affectedAppCountForTag(tagId: Long): Int =
         tagRepository.observeAppsForTag(tagId).first().size
+
+    /**
+     * Computes the categories + matching apps the sync dialog should
+     * surface. Pure read; never mutates the tag store.
+     */
+    suspend fun loadSyncCandidates(): List<SyncCategoryCandidate> =
+        categorySeeder.gatherCandidates()
+
+    /**
+     * Applies the user's sync selection. Errors from the underlying
+     * repository (cap reached etc.) are silently swallowed inside
+     * CategorySeeder so a partial failure does not abort the whole
+     * sync — observeTags() will reflect the partial result.
+     */
+    fun applySyncSelection(
+        candidates: List<SyncCategoryCandidate>,
+        selection: SyncSelection,
+    ) {
+        viewModelScope.launch {
+            categorySeeder.applySelection(candidates, selection)
+        }
+    }
 }

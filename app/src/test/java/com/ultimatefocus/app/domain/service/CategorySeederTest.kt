@@ -174,6 +174,106 @@ class CategorySeederTest {
         assertTrue("com.brand.networking_app" in tags.assignmentsFor(socialTagId))
     }
 
+    // ── Interactive sync flow (gatherCandidates + applySelection) ───────────
+
+    @Test
+    fun gatherCandidates_returnsBothCategoriesWithDetectedApps() = runTest {
+        apps.setApps(
+            listOf(
+                appInfo("com.facebook.katana"),
+                appInfo("com.king.candycrushsaga"),
+                appInfo("com.unrelated.app"),
+            ),
+        )
+
+        val candidates = newSeeder().gatherCandidates()
+
+        assertEquals(2, candidates.size)
+        val social = candidates.first { it.name == CategorySeeder.SOCIAL_TAG_NAME }
+        val games = candidates.first { it.name == CategorySeeder.GAMES_TAG_NAME }
+        assertTrue(social.packages.any { it.packageName == "com.facebook.katana" })
+        assertTrue(games.packages.any { it.packageName == "com.king.candycrushsaga" })
+        assertTrue(social.packages.none { it.packageName == "com.unrelated.app" })
+    }
+
+    @Test
+    fun gatherCandidates_marksAlreadyExistingTags() = runTest {
+        tags.seedExistingTag(99, CategorySeeder.SOCIAL_TAG_NAME, TagColor.STEEL_BLUE)
+        apps.setApps(listOf(appInfo("com.facebook.katana")))
+
+        val candidates = newSeeder().gatherCandidates()
+
+        val social = candidates.first { it.name == CategorySeeder.SOCIAL_TAG_NAME }
+        assertTrue(social.alreadyExists)
+        val games = candidates.first { it.name == CategorySeeder.GAMES_TAG_NAME }
+        assertTrue("Games should not be marked alreadyExists", !games.alreadyExists)
+    }
+
+    @Test
+    fun applySelection_skipsUnselectedCategories() = runTest {
+        apps.setApps(
+            listOf(appInfo("com.facebook.katana"), appInfo("com.king.candycrushsaga")),
+        )
+        val seeder = newSeeder()
+        val candidates = seeder.gatherCandidates()
+        val selection = SyncSelection(
+            selectedCategories = setOf(CategorySeeder.SOCIAL_TAG_NAME),
+            selectedAppsByCategory = mapOf(
+                CategorySeeder.SOCIAL_TAG_NAME to setOf("com.facebook.katana"),
+            ),
+        )
+
+        seeder.applySelection(candidates, selection)
+
+        assertTrue(tags.allTagsValue.any { it.name == CategorySeeder.SOCIAL_TAG_NAME })
+        assertTrue(tags.allTagsValue.none { it.name == CategorySeeder.GAMES_TAG_NAME })
+        assertTrue(prefs.categoriesSeededValue())
+    }
+
+    @Test
+    fun applySelection_skipsUnselectedAppsInsideSelectedCategory() = runTest {
+        apps.setApps(
+            listOf(
+                appInfo("com.facebook.katana"),
+                appInfo("com.instagram.android"),
+            ),
+        )
+        val seeder = newSeeder()
+        val candidates = seeder.gatherCandidates()
+        val selection = SyncSelection(
+            selectedCategories = setOf(CategorySeeder.SOCIAL_TAG_NAME),
+            selectedAppsByCategory = mapOf(
+                CategorySeeder.SOCIAL_TAG_NAME to setOf("com.facebook.katana"),
+            ),
+        )
+
+        seeder.applySelection(candidates, selection)
+
+        val socialId = tags.allTagsValue.first { it.name == CategorySeeder.SOCIAL_TAG_NAME }.id
+        assertTrue("com.facebook.katana" in tags.assignmentsFor(socialId))
+        assertTrue("com.instagram.android" !in tags.assignmentsFor(socialId))
+    }
+
+    @Test
+    fun applySelection_doesNotDuplicateExistingTag() = runTest {
+        tags.seedExistingTag(99, CategorySeeder.SOCIAL_TAG_NAME, TagColor.STEEL_BLUE)
+        apps.setApps(listOf(appInfo("com.facebook.katana")))
+        val seeder = newSeeder()
+        val candidates = seeder.gatherCandidates()
+        val selection = SyncSelection(
+            selectedCategories = setOf(CategorySeeder.SOCIAL_TAG_NAME),
+            selectedAppsByCategory = mapOf(
+                CategorySeeder.SOCIAL_TAG_NAME to setOf("com.facebook.katana"),
+            ),
+        )
+
+        seeder.applySelection(candidates, selection)
+
+        // No new tag created; the pre-existing one is augmented.
+        assertEquals(1, tags.allTagsValue.count { it.name == CategorySeeder.SOCIAL_TAG_NAME })
+        assertTrue("com.facebook.katana" in tags.assignmentsFor(99))
+    }
+
     // ── Test double — minimal scriptable TagRepository ──────────────────────
 
     private class ScriptedTagRepository : TagRepository {

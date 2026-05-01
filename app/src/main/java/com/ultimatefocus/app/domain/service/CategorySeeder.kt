@@ -1,8 +1,15 @@
 /**
- * One-shot onboarding service that creates two default tags ("Social
- * Media" and "Games") and assigns matching installed apps to them on
- * first launch. Triggered from LauncherActivity.onCreate via
- * lifecycleScope.launch so it does not block startup.
+ * Service that creates default tags ("Social Media" and "Games") and
+ * assigns matching installed apps to them. Has two entry points:
+ *
+ *   1. seedIfNeeded() — fire-and-forget, gated by
+ *      UserPreferencesSource.categoriesSeeded. Triggered from
+ *      LauncherActivity.onCreate on first launch (ULT-85).
+ *   2. gatherCandidates() + applySelection() — interactive flow used by
+ *      Manage Tags' "Sync with system categories" button (ULT-85
+ *      follow-up): the user reviews which categories and which apps will
+ *      be created/assigned, deselects anything they do not want, and
+ *      confirms.
  *
  * Detection strategy is layered:
  *  1. ApplicationInfo.category (API 26+) — apps that opt into
@@ -14,9 +21,12 @@
  *     users by auto-tagging ambiguous apps (WhatsApp, Telegram, etc.
  *     are deliberately left off).
  *
- * Idempotency: guarded by [UserPreferencesSource.categoriesSeeded]. Once
- * the flag flips true the seeder no-ops on every subsequent launch — so
- * a user who deletes the seeded tags will not have them re-created.
+ * Idempotency: seedIfNeeded is guarded by [UserPreferencesSource
+ * .categoriesSeeded]; once flipped true the seeder no-ops on every
+ * subsequent launch — so a user who deletes the seeded tags will not
+ * have them re-created. The interactive applySelection() path always
+ * runs (the user explicitly opted in by tapping the sync button) and
+ * also flips the flag so the auto-seeder will not later double-create.
  *
  * Failure tolerance: every TagRepository call returns a Result. Failures
  * (cap reached, color clash, app cap reached) are silently ignored and
@@ -38,6 +48,45 @@ import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * One detected app eligible to be assigned to a category tag during a
+ * sync operation. [label] is the human-readable app label (used by the
+ * sync dialog), [packageName] is the install identifier.
+ */
+data class SyncAppCandidate(
+    val packageName: String,
+    val label: String,
+)
+
+/**
+ * One detected category eligible to be created (or augmented) during a
+ * sync operation.
+ *  - [name] / [color] are the tag identity.
+ *  - [packages] are the installed apps that fall into this category via
+ *    either ApplicationInfo.category or the curated allowlist.
+ *  - [alreadyExists] is true when a tag with the same name already
+ *    exists in the user's tag set — the dialog uses this to label the
+ *    category as "(already exists)" and to skip create() in
+ *    applySelection.
+ */
+data class SyncCategoryCandidate(
+    val name: String,
+    val color: TagColor,
+    val packages: List<SyncAppCandidate>,
+    val alreadyExists: Boolean,
+)
+
+/**
+ * User selection collected by the sync dialog.
+ *  - [selectedCategories] are the category names the user wants to apply.
+ *  - [selectedAppsByCategory] maps each selected category name to the
+ *    set of package names the user wants assigned to it.
+ */
+data class SyncSelection(
+    val selectedCategories: Set<String>,
+    val selectedAppsByCategory: Map<String, Set<String>>,
+)
+
 @Singleton
 class CategorySeeder @Inject constructor(
     private val tagRepository: TagRepository,
@@ -57,26 +106,72 @@ class CategorySeeder @Inject constructor(
             return
         }
 
+        val candidates = gatherCandidates()
+        // Default-apply everything (mirrors the original auto-seed
+        // behavior). applySelection also flips the seeded flag, so no
+        // explicit mark needed here.
+        val selection = SyncSelection(
+            selectedCategories = candidates.map { it.name }.toSet(),
+            selectedAppsByCategory = candidates.associate { c ->
+                c.name to c.packages.map { it.packageName }.toSet()
+            },
+        )
+        applySelection(candidates = candidates, selection = selection)
+    }
+
+    /**
+     * Computes the categories + matching apps that the sync dialog should
+     * surface. Pure read operation: never mutates the tag store.
+     */
+    suspend fun gatherCandidates(): List<SyncCategoryCandidate> {
         val installed = appRepository.getInstalledApps().first()
-        val packageNames = installed.map { it.packageName }
+        val packageToLabel = installed.associate { it.packageName to it.label }
+        val installedSet = packageToLabel.keys
+        val existingNames = tagRepository.observeTags().first()
+            .map { it.name.lowercase() }
+            .toSet()
 
-        val socialPkgs = matchingPackages(
-            packageNames = packageNames,
-            category = ApplicationInfo.CATEGORY_SOCIAL,
-            allowlist = SOCIAL_ALLOWLIST,
-        )
-        val gamePkgs = matchingPackages(
-            packageNames = packageNames,
-            category = ApplicationInfo.CATEGORY_GAME,
-            allowlist = GAME_ALLOWLIST,
-        )
+        return DEFAULT_CATEGORIES.map { spec ->
+            val pkgs = matchingPackages(
+                packageNames = installedSet.toList(),
+                category = spec.systemCategory,
+                allowlist = spec.allowlist,
+            ).map { pkg ->
+                SyncAppCandidate(packageName = pkg, label = packageToLabel[pkg] ?: pkg)
+            }.sortedBy { it.label.lowercase() }
+            SyncCategoryCandidate(
+                name = spec.name,
+                color = spec.color,
+                packages = pkgs,
+                alreadyExists = spec.name.lowercase() in existingNames,
+            )
+        }
+    }
 
-        ensureTagAndAssign(SOCIAL_TAG_NAME, TagColor.STEEL_BLUE, socialPkgs, existingTags)
-        // Re-read tags before the second create so we account for the row
-        // that may have just been added (or pre-existed).
-        val refreshedTags = tagRepository.observeTags().first()
-        ensureTagAndAssign(GAMES_TAG_NAME, TagColor.AMBER_GOLD, gamePkgs, refreshedTags)
-
+    /**
+     * Applies a [selection] gathered against [candidates]. Creates each
+     * selected category that does not yet exist, then assigns each
+     * selected app to the corresponding tag. Errors from the repository
+     * (cap reached, color clash, app cap reached) are silently swallowed
+     * so a partial failure does not abort the whole sync.
+     *
+     * Also flips UserPreferencesSource.categoriesSeeded so the
+     * fire-and-forget seedIfNeeded() will not later re-create a tag the
+     * user just declined.
+     */
+    suspend fun applySelection(
+        candidates: List<SyncCategoryCandidate>,
+        selection: SyncSelection,
+    ) {
+        for (candidate in candidates) {
+            if (candidate.name !in selection.selectedCategories) continue
+            val pkgs = selection.selectedAppsByCategory[candidate.name].orEmpty()
+            ensureTagAndAssign(
+                name = candidate.name,
+                color = candidate.color,
+                packages = pkgs.toList(),
+            )
+        }
         userPreferences.markCategoriesSeeded()
     }
 
@@ -84,7 +179,6 @@ class CategorySeeder @Inject constructor(
         name: String,
         color: TagColor,
         packages: List<String>,
-        existingTags: List<Tag>,
     ) {
         // Honor the cap defensively — refreshedTags may have grown.
         val currentTags = tagRepository.observeTags().first()
@@ -94,7 +188,7 @@ class CategorySeeder @Inject constructor(
             return
         }
 
-        val existing = existingTags.firstOrNull { it.name.equals(name, ignoreCase = true) }
+        val existing = currentTags.firstOrNull { it.name.equals(name, ignoreCase = true) }
             ?: tagRepository.createTag(name, color).getOrElse {
                 // ColorAlreadyUsed / TagLimitReached: try to recover by
                 // matching an existing tag with the same name; otherwise
@@ -106,7 +200,7 @@ class CategorySeeder @Inject constructor(
 
         for (pkg in packages) {
             // Ignore failures (AppTagLimitReached etc.) — best-effort
-            // bulk assign in onboarding.
+            // bulk assign.
             tagRepository.assignTag(pkg, existing.id)
         }
     }
@@ -119,6 +213,14 @@ class CategorySeeder @Inject constructor(
         val byCategory = packageNames.filter { categoryResolver.categoryOf(it) == category }
         return (byCategory + allowlist.intersect(packageNames.toSet())).distinct()
     }
+
+    /** Single source of truth for the default categories. */
+    internal data class CategorySpec(
+        val name: String,
+        val color: TagColor,
+        val systemCategory: Int,
+        val allowlist: Set<String>,
+    )
 
     companion object {
         const val SOCIAL_TAG_NAME: String = "Social Media"
@@ -154,6 +256,21 @@ class CategorySeeder @Inject constructor(
             "com.dts.freefireth",
             "com.tencent.ig", // PUBG Mobile
             "com.miHoYo.GenshinImpact",
+        )
+
+        internal val DEFAULT_CATEGORIES: List<CategorySpec> = listOf(
+            CategorySpec(
+                name = SOCIAL_TAG_NAME,
+                color = TagColor.STEEL_BLUE,
+                systemCategory = ApplicationInfo.CATEGORY_SOCIAL,
+                allowlist = SOCIAL_ALLOWLIST,
+            ),
+            CategorySpec(
+                name = GAMES_TAG_NAME,
+                color = TagColor.AMBER_GOLD,
+                systemCategory = ApplicationInfo.CATEGORY_GAME,
+                allowlist = GAME_ALLOWLIST,
+            ),
         )
     }
 }
