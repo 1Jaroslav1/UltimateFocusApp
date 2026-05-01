@@ -319,8 +319,9 @@ fun SyncCategoriesEmptyDialog(onDismiss: () -> Unit) {
                 .padding(horizontal = 12.dp, vertical = 16.dp),
         ) {
             Text(
-                text = "No installed apps fall into the default Social Media or Games " +
-                    "categories. Nothing to sync right now.",
+                text = "No installed apps fall into any of the default categories " +
+                    "(Social Media, Games, Video & Streaming, Music & Audio, News). " +
+                    "Nothing to sync right now.",
                 fontSize = 14.sp,
                 color = Color.White,
             )

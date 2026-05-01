@@ -275,7 +275,8 @@ private fun SyncCategoriesRow(onClick: () -> Unit) {
             fontWeight = FontWeight.Medium,
         )
         Text(
-            text = "Create Social Media and Games tags from the apps installed on this device.",
+            text = "Create Social Media, Games, Video & Streaming, Music & Audio, " +
+                "and News tags from the apps installed on this device.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),

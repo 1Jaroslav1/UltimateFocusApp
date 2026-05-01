@@ -53,7 +53,9 @@ import com.ultimatefocus.app.domain.model.Tag
 import com.ultimatefocus.app.domain.model.TagColor
 import com.ultimatefocus.app.domain.repository.TagRepository
 import com.ultimatefocus.app.domain.repository.UserPreferencesSource
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -123,6 +125,13 @@ class CategorySeeder @Inject constructor(
     /**
      * Computes the categories + matching apps that the sync dialog should
      * surface. Pure read operation: never mutates the tag store.
+     *
+     * The PackageManager.getApplicationInfo lookups inside the resolver
+     * are run on Dispatchers.IO — on devices with many installed apps
+     * this fans out to N × DEFAULT_CATEGORIES.size system calls, which
+     * we don't want to block whichever thread the caller happens to be
+     * on (the main thread when invoked from the Sync dialog click
+     * handler). Per the code review hardening for ULT-85.
      */
     suspend fun gatherCandidates(): List<SyncCategoryCandidate> {
         val installed = appRepository.getInstalledApps().first()
@@ -132,20 +141,22 @@ class CategorySeeder @Inject constructor(
             .map { it.name.lowercase() }
             .toSet()
 
-        return DEFAULT_CATEGORIES.map { spec ->
-            val pkgs = matchingPackages(
-                packageNames = installedSet.toList(),
-                category = spec.systemCategory,
-                allowlist = spec.allowlist,
-            ).map { pkg ->
-                SyncAppCandidate(packageName = pkg, label = packageToLabel[pkg] ?: pkg)
-            }.sortedBy { it.label.lowercase() }
-            SyncCategoryCandidate(
-                name = spec.name,
-                color = spec.color,
-                packages = pkgs,
-                alreadyExists = spec.name.lowercase() in existingNames,
-            )
+        return withContext(Dispatchers.IO) {
+            DEFAULT_CATEGORIES.map { spec ->
+                val pkgs = matchingPackages(
+                    packageNames = installedSet.toList(),
+                    category = spec.systemCategory,
+                    allowlist = spec.allowlist,
+                ).map { pkg ->
+                    SyncAppCandidate(packageName = pkg, label = packageToLabel[pkg] ?: pkg)
+                }.sortedBy { it.label.lowercase() }
+                SyncCategoryCandidate(
+                    name = spec.name,
+                    color = spec.color,
+                    packages = pkgs,
+                    alreadyExists = spec.name.lowercase() in existingNames,
+                )
+            }
         }
     }
 
