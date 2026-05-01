@@ -1,6 +1,8 @@
 /**
- * Service that creates default tags ("Social Media" and "Games") and
- * assigns matching installed apps to them. Has two entry points:
+ * Service that creates default tags from Android's standard application
+ * categories ("Social Media", "Games", "Music & Audio", "Video &
+ * Streaming", "News") and assigns matching installed apps to them. Has
+ * two entry points:
  *
  *   1. seedIfNeeded() — fire-and-forget, gated by
  *      UserPreferencesSource.categoriesSeeded. Triggered from
@@ -12,14 +14,15 @@
  *      confirms.
  *
  * Detection strategy is layered:
- *  1. ApplicationInfo.category (API 26+) — apps that opt into
- *     CATEGORY_SOCIAL or CATEGORY_GAME via their manifest get tagged.
- *  2. A small curated allowlist of well-known package names — covers the
- *     popular apps whose manifests do not declare a category (or whose
- *     declarations are inconsistent across regions). Kept short and
- *     intentional so the seeder does not surprise privacy-conscious
- *     users by auto-tagging ambiguous apps (WhatsApp, Telegram, etc.
- *     are deliberately left off).
+ *  1. ApplicationInfo.category (API 26+) — apps that opt into one of the
+ *     supported CATEGORY_* values via their manifest get tagged.
+ *  2. A small curated allowlist of well-known package names per category
+ *     — covers the popular apps whose manifests do not declare a
+ *     category (or whose declarations are inconsistent across regions).
+ *     Kept short and intentional so the seeder does not surprise
+ *     privacy-conscious users by auto-tagging ambiguous apps (WhatsApp,
+ *     Telegram, etc. are deliberately left off Social Media for that
+ *     reason).
  *
  * Idempotency: seedIfNeeded is guarded by [UserPreferencesSource
  * .categoriesSeeded]; once flipped true the seeder no-ops on every
@@ -27,6 +30,12 @@
  * have them re-created. The interactive applySelection() path always
  * runs (the user explicitly opted in by tapping the sync button) and
  * also flips the flag so the auto-seeder will not later double-create.
+ *
+ * Cap behavior: with 5 default categories and a 10-tag cap, a user who
+ * already has many tags may not have room for all of them. The
+ * per-category ensureTagAndAssign() defensively re-checks the cap so
+ * we create as many as fit and silently skip the rest — better partial
+ * success than all-or-nothing.
  *
  * Failure tolerance: every TagRepository call returns a Result. Failures
  * (cap reached, color clash, app cap reached) are silently ignored and
@@ -97,14 +106,6 @@ class CategorySeeder @Inject constructor(
 
     suspend fun seedIfNeeded() {
         if (userPreferences.categoriesSeeded.first()) return
-
-        val existingTags = tagRepository.observeTags().first()
-        if (existingTags.size + 2 > MAX_TAGS) {
-            // Not enough room for both new tags. Bail and mark seeded so
-            // we do not retry every cold start.
-            userPreferences.markCategoriesSeeded()
-            return
-        }
 
         val candidates = gatherCandidates()
         // Default-apply everything (mirrors the original auto-seed
@@ -225,6 +226,9 @@ class CategorySeeder @Inject constructor(
     companion object {
         const val SOCIAL_TAG_NAME: String = "Social Media"
         const val GAMES_TAG_NAME: String = "Games"
+        const val MUSIC_TAG_NAME: String = "Music & Audio"
+        const val VIDEO_TAG_NAME: String = "Video & Streaming"
+        const val NEWS_TAG_NAME: String = "News"
 
         // Deliberately conservative: limited to apps whose primary purpose
         // is broadcast/feed-style social media. Pure messaging apps
@@ -258,6 +262,45 @@ class CategorySeeder @Inject constructor(
             "com.miHoYo.GenshinImpact",
         )
 
+        // Music streaming + audio apps. Podcast players (Pocket Casts,
+        // Audible) are intentionally left off — they sit closer to
+        // "spoken word / learning" than the music vibe of this category.
+        internal val MUSIC_ALLOWLIST: Set<String> = setOf(
+            "com.spotify.music",
+            "com.google.android.apps.youtube.music",
+            "com.apple.android.music",
+            "com.amazon.mp3",
+            "com.soundcloud.android",
+            "com.pandora.android",
+            "com.deezer.android.app",
+            "tunein.player",
+        )
+
+        // Video streaming / live-video clients.
+        internal val VIDEO_ALLOWLIST: Set<String> = setOf(
+            "com.google.android.youtube",
+            "com.netflix.mediaclient",
+            "com.disney.disneyplus",
+            "com.amazon.avod.thirdpartyclient", // Prime Video
+            "com.hulu.plus",
+            "com.hbo.hbonow",
+            "tv.twitch.android.app",
+            "com.peacocktv.peacockandroid",
+            "com.cbs.app", // Paramount+
+        )
+
+        // News & magazine readers — broadcast publishers and aggregators.
+        internal val NEWS_ALLOWLIST: Set<String> = setOf(
+            "flipboard.app",
+            "com.google.android.apps.magazines", // Google News
+            "bbc.mobile.news.ww",
+            "com.cnn.mobile.android.phone",
+            "com.nytimes.android",
+            "com.washingtonpost.rainbow",
+            "com.yahoo.mobile.client.android.yahoo",
+            "com.smartnews.android",
+        )
+
         internal val DEFAULT_CATEGORIES: List<CategorySpec> = listOf(
             CategorySpec(
                 name = SOCIAL_TAG_NAME,
@@ -270,6 +313,24 @@ class CategorySeeder @Inject constructor(
                 color = TagColor.AMBER_GOLD,
                 systemCategory = ApplicationInfo.CATEGORY_GAME,
                 allowlist = GAME_ALLOWLIST,
+            ),
+            CategorySpec(
+                name = VIDEO_TAG_NAME,
+                color = TagColor.TERRACOTTA,
+                systemCategory = ApplicationInfo.CATEGORY_VIDEO,
+                allowlist = VIDEO_ALLOWLIST,
+            ),
+            CategorySpec(
+                name = MUSIC_TAG_NAME,
+                color = TagColor.SAGE_GREEN,
+                systemCategory = ApplicationInfo.CATEGORY_AUDIO,
+                allowlist = MUSIC_ALLOWLIST,
+            ),
+            CategorySpec(
+                name = NEWS_TAG_NAME,
+                color = TagColor.DUSTY_ROSE,
+                systemCategory = ApplicationInfo.CATEGORY_NEWS,
+                allowlist = NEWS_ALLOWLIST,
             ),
         )
     }

@@ -98,17 +98,31 @@ class CategorySeederTest {
         assertEquals(0, tags.created.size)
     }
 
-    // ── Cap guard: not enough tag slots ─────────────────────────────────────
+    // ── Cap guard: partial creation when not enough slots ──────────────────
 
     @Test
-    fun seedIfNeeded_whenTagSlotsBelowTwo_skipsCreationAndFlipsFlag() = runTest {
-        // Pre-populate so existing.size + 2 > MAX_TAGS.
-        repeat(MAX_TAGS - 1) { tags.seedExistingTag(it.toLong() + 100, "Tag $it", TagColor.TEAL) }
+    fun seedIfNeeded_whenAtTagCap_createsZeroAndFlipsFlag() = runTest {
+        // No room left at all (10/10).
+        repeat(MAX_TAGS) { tags.seedExistingTag(it.toLong() + 100, "Tag $it", TagColor.TEAL) }
         apps.setApps(listOf(appInfo("com.facebook.katana")))
 
         newSeeder().seedIfNeeded()
 
         assertEquals(0, tags.created.size)
+        assertTrue(prefs.categoriesSeededValue())
+    }
+
+    @Test
+    fun seedIfNeeded_withOneSlotLeft_createsOneCategoryAndFlipsFlag() = runTest {
+        // 9 existing tags → exactly 1 slot remains; partial creation.
+        repeat(MAX_TAGS - 1) { tags.seedExistingTag(it.toLong() + 100, "Tag $it", TagColor.TEAL) }
+        apps.setApps(
+            listOf(appInfo("com.facebook.katana"), appInfo("com.king.candycrushsaga")),
+        )
+
+        newSeeder().seedIfNeeded()
+
+        assertEquals(1, tags.created.size)
         assertTrue(prefs.categoriesSeededValue())
     }
 
@@ -177,22 +191,31 @@ class CategorySeederTest {
     // ── Interactive sync flow (gatherCandidates + applySelection) ───────────
 
     @Test
-    fun gatherCandidates_returnsBothCategoriesWithDetectedApps() = runTest {
+    fun gatherCandidates_returnsAllFiveCategoriesWithDetectedApps() = runTest {
         apps.setApps(
             listOf(
                 appInfo("com.facebook.katana"),
                 appInfo("com.king.candycrushsaga"),
+                appInfo("com.spotify.music"),
+                appInfo("com.netflix.mediaclient"),
+                appInfo("com.nytimes.android"),
                 appInfo("com.unrelated.app"),
             ),
         )
 
         val candidates = newSeeder().gatherCandidates()
 
-        assertEquals(2, candidates.size)
+        assertEquals(5, candidates.size)
         val social = candidates.first { it.name == CategorySeeder.SOCIAL_TAG_NAME }
         val games = candidates.first { it.name == CategorySeeder.GAMES_TAG_NAME }
+        val music = candidates.first { it.name == CategorySeeder.MUSIC_TAG_NAME }
+        val video = candidates.first { it.name == CategorySeeder.VIDEO_TAG_NAME }
+        val news = candidates.first { it.name == CategorySeeder.NEWS_TAG_NAME }
         assertTrue(social.packages.any { it.packageName == "com.facebook.katana" })
         assertTrue(games.packages.any { it.packageName == "com.king.candycrushsaga" })
+        assertTrue(music.packages.any { it.packageName == "com.spotify.music" })
+        assertTrue(video.packages.any { it.packageName == "com.netflix.mediaclient" })
+        assertTrue(news.packages.any { it.packageName == "com.nytimes.android" })
         assertTrue(social.packages.none { it.packageName == "com.unrelated.app" })
     }
 
