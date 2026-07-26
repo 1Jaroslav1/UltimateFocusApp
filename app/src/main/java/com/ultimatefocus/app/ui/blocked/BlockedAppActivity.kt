@@ -17,7 +17,13 @@
  * label + countdown instead of stale data from the first entry. Clock is
  * injected via Hilt and provided to the Compose tree as a parameter.
  *
- * Covers: ULT-21, ULT-24, ULT-84
+ * ULT-86: reports [BlockedScreenState] as shown/hidden across onCreate,
+ * onNewIntent, and onStop so BlockedAppForegroundHandler can tell whether
+ * the block screen is genuinely still on top for a package, instead of
+ * relying on a fixed debounce window that a rapid close/reopen could slip
+ * past.
+ *
+ * Covers: ULT-21, ULT-24, ULT-84, ULT-86
  */
 package com.ultimatefocus.app.ui.blocked
 
@@ -30,6 +36,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import com.ultimatefocus.app.domain.service.BlockedScreenState
 import com.ultimatefocus.app.domain.service.Clock
 import com.ultimatefocus.app.ui.theme.UltimateFocusTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -43,12 +50,16 @@ class BlockedAppActivity : ComponentActivity() {
     @Inject
     lateinit var clock: Clock
 
+    @Inject
+    lateinit var blockedScreenState: BlockedScreenState
+
     private val extrasState: MutableStateFlow<BlockedAppExtras> =
         MutableStateFlow(BlockedAppExtras())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         extrasState.value = intent.readBlockedAppExtras()
+        blockedScreenState.onShown(extrasState.value.packageName)
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
@@ -78,6 +89,19 @@ class BlockedAppActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         extrasState.value = intent.readBlockedAppExtras()
+        blockedScreenState.onShown(extrasState.value.packageName)
+    }
+
+    /**
+     * The authoritative "block screen no longer visible" signal — fires
+     * whether dismissal happened via finishToHome()'s finish() or the
+     * singleTask instance simply being backgrounded (home/recents) without
+     * finishing. Required so BlockedAppForegroundHandler can tell a genuine
+     * reopen of the blocked app apart from transient churn (ULT-86).
+     */
+    override fun onStop() {
+        super.onStop()
+        blockedScreenState.onHidden(extrasState.value.packageName)
     }
 
     private fun finishToHome() {

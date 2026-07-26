@@ -43,7 +43,7 @@ class SessionWarningStateMachine {
             lastWarnedKey = null
             return false
         }
-        val remaining = session.endsEpochMs - nowMs
+        val remaining = session.remainingMs(nowMs)
         if (remaining <= 0L || remaining > thresholdMs) return false
         val key = WarningKey(session.packageName, session.startedEpochMs)
         if (key == lastWarnedKey) return false

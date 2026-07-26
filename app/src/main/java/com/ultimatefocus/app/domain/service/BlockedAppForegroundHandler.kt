@@ -5,8 +5,14 @@
  * user to the blocked reminder, (b) push them through the session-duration
  * picker (ULT-78), or (c) ignore.
  *
- * Tracks a per-package debounce window so the same package doesn't re-fire
- * on every transient child window during dismissal.
+ * The blocked-reminder branch is gated on [BlockedScreenState] (whether the
+ * block screen is genuinely still visible for this package) rather than a
+ * timer, so rapidly closing/reopening a blocked app can never slip past the
+ * block (ULT-86) — a fixed debounce window is not used there. The picker
+ * branch keeps a per-package debounce window so the same package doesn't
+ * re-prompt on every transient child window during its own dismissal;
+ * there's no bypass risk there since a reminder-enabled app isn't actually
+ * blocked.
  *
  * Factored out of the AccessibilityService so the decision rule is
  * unit-testable without booting the system-bound service lifecycle.
@@ -15,7 +21,7 @@
  * package is BOTH actively blocked AND opted-in to the reminder, we want
  * the user to see the block, not be allowed to commit a session.
  *
- * Covers: ULT-20, ULT-21, ULT-78
+ * Covers: ULT-20, ULT-21, ULT-78, ULT-86
  */
 package com.ultimatefocus.app.domain.service
 
@@ -41,6 +47,7 @@ class BlockedAppForegroundHandler @Inject constructor() {
         debounceMs: Long = DEFAULT_DEBOUNCE_MS,
         reminderEnabled: Set<String> = emptySet(),
         sessionActiveFor: Set<String> = emptySet(),
+        blockScreenVisiblePackage: String? = null,
     ): ForegroundAction {
         if (packageName.isNullOrBlank()) return ForegroundAction.Ignore
         if (packageName == ownPackage) return ForegroundAction.Ignore
@@ -51,25 +58,34 @@ class BlockedAppForegroundHandler @Inject constructor() {
 
         if (!isBlocked && !needsPicker) return ForegroundAction.Ignore
 
-        val last = lastFiredAt[packageName]
-        if (last != null && nowMs - last < debounceMs) return ForegroundAction.Ignore
-
-        lastFiredAt[packageName] = nowMs
         // Block always wins so the user can't bypass an active block by
         // racing through the duration picker.
-        return if (isBlocked) {
-            ForegroundAction.ShowBlocked(packageName)
-        } else {
-            ForegroundAction.RequireSessionDuration(packageName)
+        if (isBlocked) {
+            // No time-based debounce here: only suppress re-showing the
+            // block screen when it is demonstrably still on screen for
+            // this exact package. Any genuine reopen of the blocked app
+            // must always redirect back to the block screen (ULT-86).
+            return if (blockScreenVisiblePackage == packageName) {
+                ForegroundAction.Ignore
+            } else {
+                ForegroundAction.ShowBlocked(packageName)
+            }
         }
+
+        val last = lastFiredAt[packageName]
+        if (last != null && nowMs - last < debounceMs) return ForegroundAction.Ignore
+        lastFiredAt[packageName] = nowMs
+        return ForegroundAction.RequireSessionDuration(packageName)
     }
 
     companion object {
         const val DEFAULT_DEBOUNCE_MS: Long = 1_500L
 
         // Excluded: the core system UI, keyboard, and telephony/system dialer
-        // surfaces users should never be blocked from reaching.
-        private val SYSTEM_PACKAGES: Set<String> = setOf(
+        // surfaces users should never be blocked from reaching. Also reused
+        // by SessionTimerCoordinator so these surfaces don't pause an
+        // in-progress session (ULT-86).
+        internal val SYSTEM_PACKAGES: Set<String> = setOf(
             "android",
             "com.android.systemui",
             "com.android.settings",

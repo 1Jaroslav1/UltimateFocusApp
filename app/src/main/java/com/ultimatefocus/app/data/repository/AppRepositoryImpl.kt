@@ -21,6 +21,12 @@
  * - Registers a LauncherApps callback so the list auto-refreshes on
  *   installs/removals; on removal also calls
  *   BlockingScheduleRepository.purgePackage to keep schedule junctions tidy.
+ * - ULT-86: LauncherApps.getActivityList only returns launcher activities
+ *   that are currently enabled, which excludes OEM apps (e.g. many Samsung
+ *   One UI apps) shipped with their launcher activity disabled until first
+ *   run/Setup Wizard. queryInstalledApps() supplements it with a
+ *   PackageManager query that also matches disabled launcher activities,
+ *   merged via mergeAppSources so an already-enabled entry always wins.
  * - Resolves bottom-bar quick-access shortcuts: materializes a user override
  *   to an AppInfo, or falls back to the system default dialer/camera via
  *   PackageManager.resolveActivity (ULT-13, ULT-14)
@@ -101,8 +107,8 @@ class AppRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun queryInstalledApps(): List<AppInfo> =
-        launcherApps.getActivityList(null, userHandle)
+    private fun queryInstalledApps(): List<AppInfo> {
+        val enabled = launcherApps.getActivityList(null, userHandle)
             .filter { it.componentName.packageName != context.packageName }
             .map { info ->
                 AppInfo(
@@ -111,7 +117,34 @@ class AppRepositoryImpl @Inject constructor(
                     componentName = info.componentName,
                 )
             }
+        return mergeAppSources(enabled, queryDisabledLauncherActivities())
             .sortedBy { it.label.lowercase() }
+    }
+
+    /**
+     * Supplements getActivityList (enabled launcher activities only) with
+     * launcher-capable activities whose component is currently disabled or
+     * disabled-until-used — the state many OEM preloads (e.g. Samsung One
+     * UI apps) ship in until first run/Setup Wizard enables them (ULT-86).
+     */
+    private fun queryDisabledLauncherActivities(): List<AppInfo> {
+        val pm = context.packageManager
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val flags = PackageManager.MATCH_DISABLED_COMPONENTS or
+            PackageManager.MATCH_DISABLED_UNTIL_USED_COMPONENTS
+        return runCatching { pm.queryIntentActivities(intent, flags) }
+            .getOrElse { emptyList() }
+            .filter { it.activityInfo.packageName != context.packageName }
+            .map { resolveInfo ->
+                val activityInfo = resolveInfo.activityInfo
+                AppInfo(
+                    packageName = activityInfo.packageName,
+                    label = runCatching { resolveInfo.loadLabel(pm).toString() }
+                        .getOrDefault(activityInfo.packageName),
+                    componentName = ComponentName(activityInfo.packageName, activityInfo.name),
+                )
+            }
+    }
 
     private fun registerCallback() {
         launcherApps.registerCallback(object : LauncherApps.Callback() {
@@ -363,4 +396,17 @@ class AppRepositoryImpl @Inject constructor(
         )
     }
 
+}
+
+/**
+ * Unions [enabled] and [disabledOnly] by package name, with [enabled]
+ * entries always winning on conflict (they carry the authoritative,
+ * currently-active label/componentName). Pure/Android-free so it is
+ * directly unit-testable without LauncherApps/PackageManager (ULT-86).
+ */
+internal fun mergeAppSources(enabled: List<AppInfo>, disabledOnly: List<AppInfo>): List<AppInfo> {
+    val enabledPackages = enabled.map { it.packageName }.toSet()
+    return enabled + disabledOnly
+        .filter { it.packageName !in enabledPackages }
+        .distinctBy { it.packageName }
 }

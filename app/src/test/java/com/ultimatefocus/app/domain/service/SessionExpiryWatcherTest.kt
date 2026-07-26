@@ -8,9 +8,12 @@
  *  - exactly one effect per session (latched until session clears);
  *  - no emission while remaining > 0;
  *  - the effect carries the right payload per mode;
- *  - a brand-new session restarts eligibility.
+ *  - a brand-new session restarts eligibility;
+ *  - switching away from the session's package (ULT-86) pauses the
+ *    countdown so expiry never fires against an unrelated foreground app,
+ *    and resuming lets it eventually expire against the remaining budget.
  *
- * Covers: ULT-81
+ * Covers: ULT-81, ULT-86
  */
 package com.ultimatefocus.app.domain.service
 
@@ -118,6 +121,75 @@ class SessionExpiryWatcherTest {
         watcher.expiryEffects(tickIntervalMs = 1_000L).test {
             advanceTimeBy(10_000L)
             expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun awayFromSessionPackage_doesNotExpireEvenPastOriginalDeadline() = runTest {
+        coordinator.startSession("com.alpha", "Alpha", 1, SessionExpiryMode.EXIT_APP)
+        watcher.expiryEffects(tickIntervalMs = 1_000L).test {
+            // 10s of real use, then the user switches to an untouched app.
+            clock.current = 1_000L + 10_000L
+            coordinator.onForegroundPackageChanged("com.messenger", clock.current)
+            // Well past the original 1-minute deadline — must not fire.
+            clock.current = 1_000L + 120_000L
+            advanceTimeBy(1_100L)
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun resumingSessionPackage_eventuallyExpiresAgainstRemainingBudget() = runTest {
+        coordinator.startSession("com.alpha", "Alpha", 1, SessionExpiryMode.EXIT_APP)
+        watcher.expiryEffects(tickIntervalMs = 1_000L).test {
+            clock.current = 1_000L + 10_000L
+            coordinator.onForegroundPackageChanged("com.messenger", clock.current)
+            clock.current = 1_000L + 120_000L
+            advanceTimeBy(1_100L)
+            expectNoEvents()
+
+            // Resume: only 50s of the original 60s budget remain.
+            coordinator.onForegroundPackageChanged("com.alpha", clock.current)
+            clock.current += 50_000L + 1L
+            advanceTimeBy(1_100L)
+            val effect = awaitItem()
+            assertEquals("com.alpha", effect.packageName)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun budgetExhaustedExactlyAtSwitchAway_doesNotFireAgainstNewForegroundApp() = runTest {
+        // Regression test for the exact tie-race: the budget hits zero in
+        // the very same instant the user switches away. remainingMs alone
+        // would read 0 here; the explicit isPaused gate must still block it.
+        coordinator.startSession("com.alpha", "Alpha", 1, SessionExpiryMode.EXIT_APP)
+        watcher.expiryEffects(tickIntervalMs = 1_000L).test {
+            clock.current = 1_000L + 60_000L // exactly the full budget consumed
+            coordinator.onForegroundPackageChanged("com.messenger", clock.current)
+            advanceTimeBy(1_100L)
+            expectNoEvents()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun resumingWithAlreadyExhaustedBudget_firesImmediately() = runTest {
+        coordinator.startSession("com.alpha", "Alpha", 1, SessionExpiryMode.EXIT_APP)
+        watcher.expiryEffects(tickIntervalMs = 1_000L).test {
+            clock.current = 1_000L + 60_000L
+            coordinator.onForegroundPackageChanged("com.messenger", clock.current)
+            advanceTimeBy(1_100L)
+            expectNoEvents()
+
+            // User comes back to the session's own package with 0 budget
+            // left — must evict immediately, not silently stay paused.
+            coordinator.onForegroundPackageChanged("com.alpha", clock.current)
+            advanceTimeBy(1_100L)
+            val effect = awaitItem()
+            assertEquals("com.alpha", effect.packageName)
             cancelAndIgnoreRemainingEvents()
         }
     }

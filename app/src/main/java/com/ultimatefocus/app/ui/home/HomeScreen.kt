@@ -67,9 +67,11 @@ import com.ultimatefocus.app.ui.components.AccessibilityPermissionPrompt
 import com.ultimatefocus.app.ui.components.AppContextMenuDialog
 import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
 import com.ultimatefocus.app.ui.components.NotificationPermissionPrompt
+import com.ultimatefocus.app.ui.components.UsageAccessPermissionPrompt
 import com.ultimatefocus.app.ui.home.components.ClockWidget
 import com.ultimatefocus.app.util.AccessibilityPermission
 import com.ultimatefocus.app.util.NotificationListenerPermission
+import com.ultimatefocus.app.util.UsageStatsPermission
 import com.ultimatefocus.app.ui.home.components.FavoritesList
 import com.ultimatefocus.app.ui.home.components.QuickShortcutsBar
 import com.ultimatefocus.app.ui.home.components.homeSwipeGestures
@@ -270,6 +272,21 @@ fun HomeScreen(
                     onGrantAccess = { AccessibilityPermission.openSettings(context) },
                     onContinueWithout = { /* fall through via onDismiss */ },
                     onDismiss = {
+                        val next = nextBlockPromptStep(context, from = BlockPromptStep.UsageAccess)
+                        if (next == BlockPromptStep.None) {
+                            viewModel.blockApp(pending.first.packageName, pending.second)
+                            pendingBlock = null
+                            selectedApp = null
+                        } else {
+                            pendingBlock = pending.copy(third = next)
+                        }
+                    },
+                )
+                BlockPromptStep.UsageAccess -> UsageAccessPermissionPrompt(
+                    appLabel = pending.first.label,
+                    onGrantAccess = { UsageStatsPermission.openSettings(context) },
+                    onContinueWithout = { /* fall through via onDismiss */ },
+                    onDismiss = {
                         val next = nextBlockPromptStep(context, from = BlockPromptStep.Notification)
                         if (next == BlockPromptStep.None) {
                             viewModel.blockApp(pending.first.packageName, pending.second)
@@ -312,11 +329,14 @@ fun HomeScreen(
 
 /**
  * Sequence of permission prompts to show when the user commits a block:
- * Accessibility first (primary enforcement mechanism), then Notification
- * Listener (notification suppression). Either may be skipped when already
- * granted; the block itself always commits after the flow completes.
+ * Accessibility first (primary enforcement mechanism), then Usage access
+ * (ULT-86 — backs the ForegroundPoller fallback that keeps blocks working
+ * when the OS suspends the accessibility service and catches recents-
+ * switcher relaunches), then Notification Listener (notification
+ * suppression). Any may be skipped when already granted; the block itself
+ * always commits after the flow completes.
  */
-enum class BlockPromptStep { Accessibility, Notification, None }
+enum class BlockPromptStep { Accessibility, UsageAccess, Notification, None }
 
 internal fun nextBlockPromptStep(
     context: android.content.Context,
@@ -325,6 +345,9 @@ internal fun nextBlockPromptStep(
     if (from <= BlockPromptStep.Accessibility &&
         !AccessibilityPermission.isGranted(context)
     ) return BlockPromptStep.Accessibility
+    if (from <= BlockPromptStep.UsageAccess &&
+        !UsageStatsPermission.isGranted(context)
+    ) return BlockPromptStep.UsageAccess
     if (from <= BlockPromptStep.Notification &&
         !NotificationListenerPermission.isGranted(context)
     ) return BlockPromptStep.Notification

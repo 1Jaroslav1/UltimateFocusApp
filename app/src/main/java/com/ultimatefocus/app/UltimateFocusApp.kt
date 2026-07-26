@@ -12,12 +12,23 @@
  *    depend on the AccessibilityService being connected; the overlay
  *    branch uses a goHome → brief delay → startActivity sequence so the
  *    second launch happens while the launcher is foreground.
+ *  - ForegroundPoller (ULT-86) — samples the current foreground package via
+ *    UsageStatsManager to enforce blocks and drive session pause/resume
+ *    independently of BlockedAppAccessibilityService. Needed because that
+ *    service goes silent when OEM battery management (e.g. Samsung)
+ *    suspends it, and because resuming a task from the recents switcher
+ *    does not reliably emit a window-state event — while SessionExpiryRunner
+ *    keeps dispatching regardless. Without this fallback a killed service
+ *    left blocked apps usable and left the countdown permanently "resumed"
+ *    against its last known package, so it could still evict whatever app
+ *    was actually in front once the deadline passed.
  *
- * Covers: ULT-5, ULT-80, ULT-81
+ * Covers: ULT-5, ULT-80, ULT-81, ULT-86
  */
 package com.ultimatefocus.app
 
 import android.app.Application
+import com.ultimatefocus.app.service.ForegroundPoller
 import com.ultimatefocus.app.service.SessionExpiryRunner
 import com.ultimatefocus.app.service.SessionWarningPresenter
 import dagger.hilt.android.HiltAndroidApp
@@ -32,9 +43,13 @@ class UltimateFocusApp : Application() {
     @Inject
     lateinit var sessionExpiryRunner: SessionExpiryRunner
 
+    @Inject
+    lateinit var foregroundPoller: ForegroundPoller
+
     override fun onCreate() {
         super.onCreate()
         sessionWarningPresenter.start()
         sessionExpiryRunner.start()
+        foregroundPoller.start()
     }
 }

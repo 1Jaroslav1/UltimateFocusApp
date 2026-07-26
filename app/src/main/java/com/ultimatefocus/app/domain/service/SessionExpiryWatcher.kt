@@ -11,7 +11,18 @@
  * session even if multiple ticks see remaining ≤ 0 before the
  * coordinator clears the active slot.
  *
- * Covers: ULT-81
+ * ULT-86: expiry is additionally gated on the session currently being
+ * un-paused (i.e. its own package is the one actually foreground right
+ * now). remainingMs() already freezes while paused, but that alone still
+ * leaves a one-tick race at the exact instant the budget hits zero: if
+ * the user switches away in the same tick the countdown reaches 0, a
+ * remaining-based check alone could still fire against whatever app is
+ * now foreground. Requiring !isPaused closes that race outright — the
+ * effect can only ever be observed while the session's own package is
+ * the live foreground app, and correctly fires immediately on resume if
+ * the budget was already exhausted while paused.
+ *
+ * Covers: ULT-81, ULT-86
  */
 package com.ultimatefocus.app.domain.service
 
@@ -48,7 +59,8 @@ class SessionExpiryWatcher @Inject constructor(
             lastDispatchedKey = null
             return null
         }
-        val remaining = session.endsEpochMs - clock.now()
+        if (session.isPaused) return null
+        val remaining = session.remainingMs(clock.now())
         if (remaining > 0L) return null
         val key = ExpiryKey(session.packageName, session.startedEpochMs)
         if (key == lastDispatchedKey) return null

@@ -5,9 +5,11 @@
  *  - isSessionActiveFor returns true only inside the time window for the
  *    matching package;
  *  - remainingMsFor counts down via the injected Clock;
- *  - endSession clears the slot.
+ *  - endSession clears the slot;
+ *  - onForegroundPackageChanged pauses the countdown while the user is away
+ *    from the session's package and resumes it when they come back (ULT-86).
  *
- * Covers: ULT-78
+ * Covers: ULT-78, ULT-86
  */
 package com.ultimatefocus.app.domain.service
 
@@ -42,7 +44,7 @@ class SessionTimerCoordinatorTest {
             expiryMode = SessionExpiryMode.ONLY_REMINDER,
         )
         assertEquals("com.alpha", session.packageName)
-        assertEquals(1_000L + 5 * 60_000L, session.endsEpochMs)
+        assertEquals(5 * 60_000L, coordinator.remainingMsFor("com.alpha"))
         assertTrue(coordinator.isSessionActiveFor("com.alpha"))
     }
 
@@ -102,5 +104,55 @@ class SessionTimerCoordinatorTest {
         val s = coordinator.active.value
         assertNotNull(s)
         assertEquals(SessionExpiryMode.EXIT_AND_BLOCK, s!!.expiryMode)
+    }
+
+    // ── Foreground pause/resume (ULT-86) ────────────────────────────────────
+
+    @Test
+    fun onForegroundPackageChanged_awayFromSessionPackage_pausesRemaining() {
+        coordinator.startSession("com.alpha", "Alpha", 15, SessionExpiryMode.EXIT_APP)
+        clock.current += 10 * 60_000L // 10 min of real use
+        coordinator.onForegroundPackageChanged("com.messenger", clock.current)
+        clock.current += 60 * 60_000L // an hour goes by on a different app
+        assertEquals(5 * 60_000L, coordinator.remainingMsFor("com.alpha"))
+        assertTrue(coordinator.isSessionActiveFor("com.alpha"))
+    }
+
+    @Test
+    fun onForegroundPackageChanged_backToOwnPackage_resumesCountdown() {
+        coordinator.startSession("com.alpha", "Alpha", 15, SessionExpiryMode.EXIT_APP)
+        clock.current += 10 * 60_000L
+        coordinator.onForegroundPackageChanged("com.messenger", clock.current)
+        clock.current += 60 * 60_000L
+        coordinator.onForegroundPackageChanged("com.alpha", clock.current)
+        clock.current += 5 * 60_000L - 1L
+        assertTrue(coordinator.isSessionActiveFor("com.alpha"))
+        clock.current += 1L
+        assertEquals(0L, coordinator.remainingMsFor("com.alpha"))
+        assertFalse(coordinator.isSessionActiveFor("com.alpha"))
+    }
+
+    @Test
+    fun onForegroundPackageChanged_systemUiPackage_doesNotPause() {
+        coordinator.startSession("com.alpha", "Alpha", 15, SessionExpiryMode.EXIT_APP)
+        clock.current += 5 * 60_000L
+        coordinator.onForegroundPackageChanged("com.android.systemui", clock.current)
+        clock.current += 60 * 60_000L
+        assertEquals(0L, coordinator.remainingMsFor("com.alpha"))
+        assertFalse(coordinator.isSessionActiveFor("com.alpha"))
+    }
+
+    @Test
+    fun onForegroundPackageChanged_noActiveSession_isNoOp() {
+        coordinator.onForegroundPackageChanged("com.alpha", clock.current)
+        assertNull(coordinator.active.value)
+    }
+
+    @Test
+    fun onForegroundPackageChanged_nullOrBlankPackage_isNoOp() {
+        coordinator.startSession("com.alpha", "Alpha", 15, SessionExpiryMode.EXIT_APP)
+        coordinator.onForegroundPackageChanged(null, clock.current)
+        coordinator.onForegroundPackageChanged("", clock.current)
+        assertEquals(15 * 60_000L, coordinator.remainingMsFor("com.alpha"))
     }
 }

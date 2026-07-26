@@ -60,6 +60,7 @@ import com.ultimatefocus.app.ui.components.AccessibilityPermissionPrompt
 import com.ultimatefocus.app.ui.components.AppContextMenuDialog
 import com.ultimatefocus.app.ui.components.BlockDurationPickerDialog
 import com.ultimatefocus.app.ui.components.NotificationPermissionPrompt
+import com.ultimatefocus.app.ui.components.UsageAccessPermissionPrompt
 import com.ultimatefocus.app.ui.drawer.components.AppListItem
 import com.ultimatefocus.app.ui.drawer.components.SearchBar
 import com.ultimatefocus.app.ui.home.BlockPromptStep
@@ -67,6 +68,7 @@ import com.ultimatefocus.app.ui.home.nextBlockPromptStep
 import com.ultimatefocus.app.ui.tags.TagPickerDialog
 import com.ultimatefocus.app.util.AccessibilityPermission
 import com.ultimatefocus.app.util.NotificationListenerPermission
+import com.ultimatefocus.app.util.UsageStatsPermission
 
 @Composable
 fun AppDrawerScreen(
@@ -309,6 +311,21 @@ fun AppDrawerScreen(
             BlockPromptStep.Accessibility -> AccessibilityPermissionPrompt(
                 appLabel = pending.first.label,
                 onGrantAccess = { AccessibilityPermission.openSettings(launchContext) },
+                onContinueWithout = { /* fall through via onDismiss */ },
+                onDismiss = {
+                    val next = nextBlockPromptStep(launchContext, from = BlockPromptStep.UsageAccess)
+                    if (next == BlockPromptStep.None) {
+                        viewModel.blockApp(pending.first.packageName, pending.second)
+                        pendingBlock = null
+                        selectedApp = null
+                    } else {
+                        pendingBlock = pending.copy(third = next)
+                    }
+                },
+            )
+            BlockPromptStep.UsageAccess -> UsageAccessPermissionPrompt(
+                appLabel = pending.first.label,
+                onGrantAccess = { UsageStatsPermission.openSettings(launchContext) },
                 onContinueWithout = { /* fall through via onDismiss */ },
                 onDismiss = {
                     val next = nextBlockPromptStep(launchContext, from = BlockPromptStep.Notification)

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gradle wrapper:*)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(mkdir -p app/src/main/java/com/ultimatefocus/app)",
+      "Bash(mkdir -p app/src/test/java/com/ultimatefocus/app)",
+      "Bash(mkdir -p app/src/androidTest/java/com/ultimatefocus/app)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(ls \"E:\\\\Future\\\\Minimalist\"/gradlew*)",
+      "Bash(ls gradlew*)",
+      "Bash(ls E:/Future/Minimalist/gradlew*)",
+      "Bash(ls E:/Future/Minimalist/*.bat)",
+      "Bash(ls E:/Future/Minimalist/gradle*)",
+      "Bash(where gradle.bat)",
+      "Read(//c/Users/garba/.gradle/wrapper/dists//**)",
+      "Bash(/c/Users/garba/.gradle/wrapper/dists/gradle-9.4.1-bin/arn2x92ynaizyzdaamcbpbhtj/gradle-9.4.1/bin/gradle wrapper:*)",
+      "Bash(./gradlew testDebugUnitTest)",
+      "Bash(./gradlew --stop)",
+      "Bash(gh --version)",
+      "Bash(git checkout *)"
+    ]
+  }
+}
