@@ -8,3 +8,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+/app/build
+*.log
+/.claude/worktrees
+*.jar
+*.bat
+*.pro
+*.salive

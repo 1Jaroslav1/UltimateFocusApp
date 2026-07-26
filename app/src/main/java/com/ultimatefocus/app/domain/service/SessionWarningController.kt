@@ -61,7 +61,7 @@ class SessionWarningController @Inject constructor(
         return SessionWarningEvent(
             packageName = session.packageName,
             appLabel = session.appLabel,
-            remainingMs = (session.endsEpochMs - now).coerceAtLeast(0L),
+            remainingMs = session.remainingMs(now),
         )
     }
 

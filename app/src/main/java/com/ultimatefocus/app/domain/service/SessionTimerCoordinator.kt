@@ -8,10 +8,19 @@
  *  - dispatch the session-end behavior mode (ULT-81).
  *
  * `endSession` and the auto-derived expiry are the only ways the session
- * exits — there is no "resume" semantic. Process death implicitly clears
- * the session since the holder is process-scoped.
+ * fully exits. The countdown itself pauses/resumes via
+ * [onForegroundPackageChanged] as the foreground package changes, so it
+ * only ticks down while the session's own package is actually in use
+ * (ULT-86). Two independent producers call this: BlockedAppAccessibility-
+ * Service (immediate, but silent whenever the OS suspends/kills the
+ * accessibility service) and ForegroundPoller (a ~1s UsageStatsManager
+ * poll, accessibility-free) — the poller exists specifically so pause/resume
+ * still works when the accessibility service is dead, matching
+ * SessionExpiryRunner's own "process-lifetime, accessibility-independent"
+ * dispatch guarantee. Process death implicitly clears the session since the
+ * holder is process-scoped.
  *
- * Covers: ULT-78
+ * Covers: ULT-78, ULT-86
  */
 package com.ultimatefocus.app.domain.service
 
@@ -50,14 +59,40 @@ class SessionTimerCoordinator @Inject constructor(
     /** Returns true when [packageName] currently has an in-progress session. */
     fun isSessionActiveFor(packageName: String): Boolean {
         val s = _active.value ?: return false
-        return s.packageName == packageName && clock.now() < s.endsEpochMs
+        return s.packageName == packageName && s.remainingMs(clock.now()) > 0L
     }
 
     /** Milliseconds left in the active session for [packageName], or null. */
     fun remainingMsFor(packageName: String): Long? {
         val s = _active.value ?: return null
         if (s.packageName != packageName) return null
-        return (s.endsEpochMs - clock.now()).coerceAtLeast(0L)
+        return s.remainingMs(clock.now())
+    }
+
+    /**
+     * Pauses the active session's countdown when the foreground package
+     * moves away from it, and resumes it when the foreground package
+     * comes back — so the countdown only ever runs while its own package
+     * is actually in use. System surfaces (keyboard, System UI, etc.) are
+     * ignored so they don't pause an in-progress session. Covers ULT-86.
+     */
+    fun onForegroundPackageChanged(packageName: String?, nowMs: Long) {
+        if (packageName.isNullOrBlank()) return
+        if (packageName in BlockedAppForegroundHandler.SYSTEM_PACKAGES) return
+        val session = _active.value ?: return
+        if (packageName == session.packageName) {
+            if (session.isPaused) {
+                _active.value = session.copy(resumedAtEpochMs = nowMs)
+            }
+        } else {
+            val resumedAt = session.resumedAtEpochMs
+            if (resumedAt != null) {
+                _active.value = session.copy(
+                    consumedMsBeforePause = session.consumedMsBeforePause + (nowMs - resumedAt),
+                    resumedAtEpochMs = null,
+                )
+            }
+        }
     }
 
     fun endSession() { _active.value = null }

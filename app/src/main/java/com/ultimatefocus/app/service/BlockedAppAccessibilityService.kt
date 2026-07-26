@@ -23,7 +23,15 @@
  * or disabled accessibility service does not leave the user with a
  * silently-failing timer.
  *
- * Covers: ULT-20, ULT-21, ULT-24, ULT-75, ULT-78
+ * ULT-86: this service is the FAST path, not the only one. It goes silent
+ * whenever the OS suspends it (common under OEM battery management) and it
+ * does not reliably observe a task being resumed from the recents switcher.
+ * ForegroundPoller polls UsageStatsManager as an accessibility-free fallback
+ * running the same BlockedAppForegroundHandler rule; the two dedupe against
+ * each other through BlockedScreenState and share intent construction via
+ * BlockedAppIntentFactory.
+ *
+ * Covers: ULT-20, ULT-21, ULT-24, ULT-75, ULT-78, ULT-86
  */
 package com.ultimatefocus.app.service
 
@@ -31,15 +39,14 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import com.ultimatefocus.app.domain.model.ActiveBlockInfo
 import com.ultimatefocus.app.domain.model.SessionExpiryMode
 import com.ultimatefocus.app.domain.repository.SessionTimerRepository
 import com.ultimatefocus.app.domain.service.BlockedAppForegroundHandler
+import com.ultimatefocus.app.domain.service.BlockedScreenState
 import com.ultimatefocus.app.domain.service.BlockingSourceCoordinator
 import com.ultimatefocus.app.domain.service.Clock
 import com.ultimatefocus.app.domain.service.ForegroundAction
 import com.ultimatefocus.app.domain.service.SessionTimerCoordinator
-import com.ultimatefocus.app.ui.blocked.BlockedAppActivity
 import com.ultimatefocus.app.ui.sessiontimer.SessionDurationPickerActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -69,6 +76,12 @@ class BlockedAppAccessibilityService : AccessibilityService() {
 
     @Inject
     lateinit var sessionTimerCoordinator: SessionTimerCoordinator
+
+    @Inject
+    lateinit var blockedScreenState: BlockedScreenState
+
+    @Inject
+    lateinit var blockedAppIntentFactory: BlockedAppIntentFactory
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
@@ -103,9 +116,15 @@ class BlockedAppAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val pkg = event?.packageName?.toString() ?: return
-        val sessionActiveFor = sessionTimerCoordinator.active.value
-            ?.takeIf { it.packageName == pkg && clock.now() < it.endsEpochMs }
-            ?.let { setOf(it.packageName) } ?: emptySet()
+        // Undebounced pause/resume accounting for the session timer (ULT-86)
+        // — kept independent of the debounced decision below since active-
+        // time accounting needs the raw per-event foreground signal.
+        sessionTimerCoordinator.onForegroundPackageChanged(pkg, clock.now())
+        val sessionActiveFor = if (sessionTimerCoordinator.isSessionActiveFor(pkg)) {
+            setOf(pkg)
+        } else {
+            emptySet()
+        }
         val decision = foregroundHandler.onForegroundPackage(
             packageName = pkg,
             nowMs = clock.now(),
@@ -113,6 +132,7 @@ class BlockedAppAccessibilityService : AccessibilityService() {
             ownPackage = packageName,
             reminderEnabled = reminderEnabled,
             sessionActiveFor = sessionActiveFor,
+            blockScreenVisiblePackage = blockedScreenState.visiblePackage,
         )
         when (decision) {
             is ForegroundAction.ShowBlocked -> {
@@ -135,47 +155,16 @@ class BlockedAppAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun showReminder(pkg: String) {
-        val info: ActiveBlockInfo = coordinator.activeBlockInfo(pkg) ?: return
-        val label = runCatching {
-            val pm = packageManager
-            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
-        }.getOrDefault(pkg)
-        val intent = when (info) {
-            is ActiveBlockInfo.Manual -> BlockedAppActivity.intent(
-                context = this,
-                packageName = pkg,
-                appLabel = label,
-                blockedUntilEpochMs = info.blockedUntilEpochMs,
-                durationLabel = info.durationLabel,
-                scheduleName = null,
-            )
-            is ActiveBlockInfo.Scheduled -> BlockedAppActivity.intent(
-                context = this,
-                packageName = pkg,
-                appLabel = label,
-                blockedUntilEpochMs = info.blockedUntilEpochMs,
-                durationLabel = "",
-                scheduleName = info.scheduleName,
-            )
-            is ActiveBlockInfo.Tag -> BlockedAppActivity.intent(
-                context = this,
-                packageName = pkg,
-                appLabel = label,
-                blockedUntilEpochMs = info.blockedUntilEpochMs,
-                durationLabel = info.durationLabel,
-                scheduleName = null,
-            )
-        }.apply {
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        }
+        // Launched from the service's own context so the background-activity
+        // -launch privilege on API 29+ applies. Intent construction is shared
+        // with ForegroundPoller's fallback path so the two cannot drift.
+        val intent = blockedAppIntentFactory.intentFor(launchContext = this, packageName = pkg)
+            ?: return
         startActivity(intent)
     }
 
     private suspend fun showDurationPicker(pkg: String) {
-        val label = runCatching {
-            val pm = packageManager
-            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
-        }.getOrDefault(pkg)
+        val label = blockedAppIntentFactory.appLabel(pkg)
         // Read the latest default mode from the repository here rather than
         // the cached @Volatile field — guarantees we never use a stale
         // value during the brief window between settings change and the
